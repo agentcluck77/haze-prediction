@@ -217,7 +217,10 @@ def main():
     print(f"  Smoke (0):   F1={metrics['f1_per_class'][0]:.4f}, Precision={metrics['precision_per_class'][0]:.4f}, Recall={metrics['recall_per_class'][0]:.4f}")
     print(f"  Haze (1):    F1={metrics['f1_per_class'][1]:.4f}, Precision={metrics['precision_per_class'][1]:.4f}, Recall={metrics['recall_per_class'][1]:.4f}")
     print(f"  Normal (2):  F1={metrics['f1_per_class'][2]:.4f}, Precision={metrics['precision_per_class'][2]:.4f}, Recall={metrics['recall_per_class'][2]:.4f}")
-    print(f"Model Size: {num_params:,} parameters")
+    if num_params == 'N/A':
+        print("Model Size: N/A parameters")
+    else:
+        print(f"Model Size: {int(num_params):,} parameters")
     print("="*70)
     
     # Prepare results for CSV

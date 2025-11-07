@@ -1,24 +1,24 @@
-# Training Configuration for ViT-B/16 on HacX Dataset
+# Training Configuration for ConvNeXt on HacX Dataset
 
 # Model Configuration
 model:
-  type: "vit"  # Model type: vit, convnext
-  name: "google/vit-base-patch16-384"
+  type: "convnext"  # Model type: vit, convnext
+  name: "facebook/convnext-base-224"
   num_classes: 3
-  image_size: 384
+  image_size: 224
 
 # Data Configuration
 data:
   train_dir: "HacX-dataset/train"
   val_dir: "HacX-dataset/test"
-  batch_size: 8
+  batch_size: 16  # ConvNeXt typically uses smaller batch sizes
   num_workers: 4
   
 # Training Hyperparameters
 training:
   num_epochs: 100
-  learning_rate: 3e-5
-  weight_decay: 0.01
+  learning_rate: 2e-4  # ConvNeXt typically uses higher learning rates
+  weight_decay: 0.05
   warmup_steps: 500
   scheduler: "cosine"  # cosine, linear, constant, cosine_with_restarts, polynomial
   gradient_accumulation_steps: 1
@@ -79,13 +79,13 @@ augmentation:
 
 # Checkpointing and Logging
 checkpointing:
-  save_dir: "checkpoints"
+  save_dir: "checkpoints/convnext"  # Separate directory for ConvNeXt models
   save_every_n_epochs: 5
   save_best_only: false
   
 logging:
-  project_name: "hacx-vit-training"
-  run_name: "vit-b16-384-full-finetune"
+  project_name: "hacx-convnext-training"
+  run_name: "convnext-base-224-full-finetune"
   log_every_n_steps: 50
 
 # Hardware Configuration

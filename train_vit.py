@@ -3,8 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.cuda.amp import GradScaler, autocast
-from transformers import ViTForImageClassification, ViTImageProcessor
-from transformers import get_scheduler
+from transformers import (
+    ViTForImageClassification, 
+    ViTImageProcessor,
+    ConvNextForImageClassification,
+    ConvNextImageProcessor,
+    get_scheduler
+)
 from tqdm import tqdm
 import wandb
 import argparse
@@ -15,6 +20,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 def compute_metrics(preds, labels):
     preds = np.argmax(preds, axis=1)
@@ -321,13 +327,24 @@ def main():
     if args.learning_rate:
         config['training']['learning_rate'] = args.learning_rate
     
-    # Create save directory
-    os.makedirs(config['checkpointing']['save_dir'], exist_ok=True)
+    # Create unique save directory with timestamp
+    base_save_dir = config['checkpointing']['save_dir']
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_type = config['model'].get('type', 'vit').upper()
+    run_name = f"{model_type}_{timestamp}"
+    save_dir = os.path.join(base_save_dir, run_name)
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Update config with actual save directory
+    config['checkpointing']['save_dir'] = save_dir
+    config['run_name'] = run_name
+    
+    print(f"Checkpoints will be saved to: {save_dir}")
     
     # Initialize wandb
     wandb.init(
         project=config['logging']['project_name'], 
-        name=config['logging']['run_name'], 
+        name=f"{config['logging']['run_name']}_{run_name}", 
         config=config
     )
     
@@ -348,12 +365,23 @@ def main():
     print(f'Train samples: {len(train_loader.dataset)}')
     print(f'Val samples: {len(val_loader.dataset)}')
     
-    # Load model
-    model = ViTForImageClassification.from_pretrained(
-        config['model']['name'],
-        num_labels=len(class_names),
-        ignore_mismatched_sizes=True
-    )
+    # Load model based on config
+    model_type = config['model'].get('type', 'vit').lower()
+    
+    if model_type == 'vit':
+        model = ViTForImageClassification.from_pretrained(
+            config['model']['name'],
+            num_labels=len(class_names),
+            ignore_mismatched_sizes=True
+        )
+    elif model_type == 'convnext':
+        model = ConvNextForImageClassification.from_pretrained(
+            config['model']['name'],
+            num_labels=len(class_names),
+            ignore_mismatched_sizes=True
+        )
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}. Supported types: 'vit', 'convnext'")
     
     # Enable full fine-tuning (all parameters will be updated)
     for param in model.parameters():

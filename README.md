@@ -1,6 +1,6 @@
-# HacX ViT-B/16 Training
+# HacX Model Training
 
-Training ViT-B/16 model at 384 resolution with full fine-tuning on HacX dataset.
+Training vision transformer and ConvNeXt models on HacX dataset with full fine-tuning.
 
 ## Setup
 
@@ -33,39 +33,69 @@ HacX-dataset/
 
 ## Training
 
-Start training with default settings:
+### Training Different Models
+
+The training script now supports multiple model architectures through configuration files:
+
+#### ViT Model (default)
 ```bash
-uv run python train_vit.py
+uv run python train_vit.py --config config.yaml
+```
+
+#### ConvNeXt Model
+```bash
+uv run python train_vit.py --config config_convnext.yaml
 ```
 
 ### Custom Training Parameters
 
 ```bash
-uv run python train_vit.py \
+uv run python train_vit.py --config config.yaml \
   --batch_size 8 \
   --num_epochs 50 \
   --learning_rate 3e-5 \
-  --data_dir HacX-dataset \
-  --save_dir checkpoints
+  --data_dir HacX-dataset
 ```
 
 ### Parameters
 
-- `--batch_size`: Batch size (default: 8, optimized for GTX 4090)
-- `--num_epochs`: Number of training epochs (default: 50)
-- `--learning_rate`: Learning rate (default: 3e-5)
-- `--data_dir`: Path to dataset (default: HacX-dataset)
-- `--save_dir`: Checkpoint directory (default: checkpoints)
-- `--project_name`: WandB project name
-- `--run_name`: WandB run name
+- `--config`: Path to config file (default: config.yaml)
+- `--batch_size`: Override batch size from config
+- `--num_epochs`: Override number of epochs from config
+- `--learning_rate`: Override learning rate from config
+- `--data_dir`: Override dataset path from config
+
+### Configuration Files
+
+- `config.yaml`: ViT-B/16 configuration (384x384 input)
+- `config_convnext.yaml`: ConvNeXt-Base configuration (224x224 input)
+
+Each config file specifies:
+- Model type and architecture
+- Training hyperparameters
+- Data augmentation settings
+- Hardware optimizations
 
 ## Model Details
 
-- **Architecture**: ViT-B/16 (384x384 input)
+### Supported Architectures
+
+#### ViT-B/16
+- **Input**: 384x384
+- **Parameters**: ~86M
+- **Config**: `config.yaml`
+
+#### ConvNeXt-Base
+- **Input**: 224x224
+- **Parameters**: ~88M
+- **Config**: `config_convnext.yaml`
+
+### Common Training Features
 - **Training**: Full fine-tuning (all parameters updated)
 - **Classes**: 3 (haze, normal, smoke)
 - **Optimization**: AdamW with cosine scheduler
 - **Mixed Precision**: Enabled for GTX 4090 optimization
+- **Advanced Features**: EMA, MixUp, gradient accumulation, label smoothing
 
 ## Monitoring
 
@@ -73,8 +103,14 @@ Training progress is logged to Weights & Biases. Set your `WANDB_API_KEY` enviro
 
 ## Checkpoints
 
-- Best model saved as `checkpoints/best_model.pth`
-- Regular checkpoints saved every 5 epochs
+Each training run creates a unique checkpoint folder:
+- ViT: `checkpoints/VIT_YYYYMMDD_HHMMSS/`
+- ConvNeXt: `checkpoints/CONVNEXT_YYYYMMDD_HHMMSS/`
+
+Inside each folder:
+- `best_model.pth`: Best validation model
+- `checkpoint_epoch_N.pth`: Regular checkpoints (every 5 epochs)
+- Config and training metadata included
 
 ## Model Evaluation
 
@@ -83,16 +119,25 @@ After training, evaluate your model using the evaluation system:
 ### Quick Evaluation
 
 ```bash
-# Copy trained model to evaluation directory
-cp checkpoints/best_model.pth evaluation/weights/vit_b16_hacx.pth
+# Find your latest checkpoint (example for ViT)
+LATEST_CHECKPOINT=$(ls -t checkpoints/VIT_* | head -n 1)
 
-# Run evaluation
+# Run evaluation for ViT model
 cd evaluation
-uv run python run_evaluation.py
+uv run python run_evaluation.py --model_path $LATEST_CHECKPOINT/best_model.pth --model_type vit
+
+# Or run evaluation for ConvNeXt model
+LATEST_CONVNEXT_CHECKPOINT=$(ls -t checkpoints/CONVNEXT_* | head -n 1)
+uv run python run_evaluation.py --model_path $LATEST_CONVNEXT_CHECKPOINT/best_model.pth --model_type convnext
 
 # Compute metrics
 uv run python compute_metrics.py --predictions output/predictions.csv --weights weights --output output/eval_result.csv
 ```
+
+### Evaluation Parameters
+
+- `--model_path`: Path to model checkpoint file (required)
+- `--model_type`: Model architecture type (vit or convnext, default: vit)
 
 ### Evaluation Results
 

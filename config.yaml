@@ -1,0 +1,117 @@
+# Training Configuration for ViT-B/16 on HacX Dataset
+
+# Model Configuration
+model:
+  name: "google/vit-base-patch16-384"
+  num_classes: 3
+  image_size: 384
+
+# Data Configuration
+data:
+  train_dir: "HacX-dataset/train"
+  val_dir: "HacX-dataset/test"
+  batch_size: 8
+  num_workers: 4
+  
+# Training Hyperparameters
+training:
+  num_epochs: 100
+  learning_rate: 3e-5
+  weight_decay: 0.01
+  warmup_steps: 500
+  scheduler: "cosine"  # cosine, linear, constant, cosine_with_restarts, polynomial
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  label_smoothing: 0.0
+  mixed_precision: true
+  
+# Optimizer Configuration
+optimizer:
+  type: "adamw"  # adamw, adam, sgd, rmsprop
+  betas: [0.9, 0.999]
+  eps: 1e-8
+  amsgrad: false
+  
+# Advanced Training Techniques
+advanced:
+  use_ema: false  # Exponential Moving Average
+  ema_decay: 0.999
+  use_mixup: false
+  mixup_alpha: 0.2
+  use_cutmix: false
+  cutmix_alpha: 1.0
+  use_random_erasing: false
+  random_erasing_prob: 0.25
+  
+# Learning Rate Scheduler
+scheduler_params:
+  cosine_t_max: null  # Auto-calculated if null
+  cosine_eta_min: 0.0
+  polynomial_power: 1.0
+  linear_gamma: 0.9
+
+# Data Augmentation
+augmentation:
+  horizontal_flip_prob: 0.5
+  vertical_flip_prob: 0.0
+  rotation_degrees: 10
+  color_jitter:
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+    hue: 0.1
+  random_resized_crop:
+    scale: [0.8, 1.0]
+    ratio: [0.75, 1.33]
+  gaussian_blur:
+    enabled: false
+    kernel_size: 3
+    sigma: [0.1, 2.0]
+  random_grayscale: 0.0
+  gaussian_noise:
+    enabled: false
+    mean: 0.0
+    std: 0.1
+  solarization:
+    enabled: false
+    threshold: 0.5
+
+# Checkpointing and Logging
+checkpointing:
+  save_dir: "checkpoints"
+  save_every_n_epochs: 5
+  save_best_only: false
+  
+logging:
+  project_name: "hacx-vit-training"
+  run_name: "vit-b16-384-full-finetune"
+  log_every_n_steps: 50
+
+# Hardware Configuration
+hardware:
+  device: "cuda"  # cuda, cpu
+  pin_memory: true
+  compile_model: false  # PyTorch 2.0+ model compilation
+  use_tf32: true  # Use TF32 on Ampere GPUs
+  cudnn_benchmark: true  # Optimize for fixed input sizes
+  
+# Regularization
+regularization:
+  dropout_rate: 0.0  # Additional dropout (model-specific)
+  stochastic_depth: 0.0  # For vision transformers
+  use_early_stopping: false
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+  
+# Loss Function
+loss:
+  type: "cross_entropy"  # cross_entropy, focal, label_smoothing_cross_entropy
+  focal_alpha: 1.0
+  focal_gamma: 2.0
+  class_weights: null  # [w1, w2, w3] for class imbalance
+
+# Evaluation Configuration
+evaluation:
+  eval_every_n_epochs: 1
+  save_predictions: true
+  compute_metrics: true

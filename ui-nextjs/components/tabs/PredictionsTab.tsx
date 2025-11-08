@@ -52,6 +52,7 @@ export default function PredictionsTab({ showLoading, hideLoading, showToast }: 
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedHorizon]);
 
   const horizons: (Horizon | 'all')[] = ['24h', '48h', '72h', '7d', 'all'];

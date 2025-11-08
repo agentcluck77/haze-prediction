@@ -63,6 +63,7 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
       mounted = false;
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const nationalPSI = psi?.readings?.psi_24h?.national || 0;

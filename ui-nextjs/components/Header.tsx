@@ -61,6 +61,7 @@ export default function Header({ showToast }: HeaderProps) {
       mounted = false;
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseURL]);
 
   const handleServerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

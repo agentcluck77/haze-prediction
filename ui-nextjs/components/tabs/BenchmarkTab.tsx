@@ -164,7 +164,7 @@ function BenchmarkJobCard({ jobId, job }: { jobId: string; job: BenchmarkJobStat
         </div>
       </div>
 
-      {job.status === 'running' && 'progress' in job && (
+      {job.status === 'running' && (
         <div className="mt-3">
           <div className="text-sm text-gray-600 mb-1">
             {job.progress.current_test || 'Running...'}
@@ -181,7 +181,7 @@ function BenchmarkJobCard({ jobId, job }: { jobId: string; job: BenchmarkJobStat
         </div>
       )}
 
-      {job.status === 'completed' && 'results' in job && (
+      {job.status === 'completed' && (
         <div className="mt-3 space-y-2 text-sm">
           <div>
             <strong>Duration:</strong> {job.duration_seconds || 0} seconds

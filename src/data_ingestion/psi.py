@@ -115,71 +115,79 @@ def fetch_current_psi():
         return pd.DataFrame()
 
 
-def fetch_historical_psi(limit=100, offset=0):
+def fetch_historical_psi(date_str):
     """
-    Fetch historical PSI data from data.gov.sg archive.
+    Fetch historical PSI data for a specific date from Singapore NEA API.
+
+    This uses the same current PSI API with a date parameter.
+    Coverage: Feb 2016 to present.
 
     Args:
-        limit: Number of records to fetch (max 100 per request)
-        offset: Offset for pagination
+        date_str: Date in YYYY-MM-DD format
 
     Returns:
-        pandas.DataFrame: Historical PSI readings
+        pandas.DataFrame: Historical PSI readings for all hours on that date
     """
-    params = {
-        'resource_id': HISTORICAL_DATASET_ID,
-        'limit': min(limit, 100),
-        'offset': offset
-    }
+    params = {'date': date_str}
 
     try:
-        response = requests.get(HISTORICAL_PSI_URL, params=params, timeout=30)
+        response = requests.get(CURRENT_PSI_URL, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
 
-        if not data.get('success') or 'result' not in data:
+        if 'items' not in data or len(data['items']) == 0:
             return pd.DataFrame()
 
-        records = data['result'].get('records', [])
+        records = []
 
-        if len(records) == 0:
-            return pd.DataFrame()
+        # Process each hourly reading
+        for item in data['items']:
+            timestamp = pd.to_datetime(item['timestamp'])
+            readings = item['readings']
 
-        # Convert to DataFrame
-        df = pd.DataFrame(records)
+            # Extract PSI 24-hour readings
+            if 'psi_twenty_four_hourly' not in readings:
+                continue
 
-        # Parse timestamp
-        if '24hr_psi' in df.columns:
-            df = df.rename(columns={'24hr_psi': 'timestamp'})
+            psi_24h = readings['psi_twenty_four_hourly']
 
-        # Parse timestamp column
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+            for region, psi_value in psi_24h.items():
+                record = {
+                    'timestamp': timestamp,
+                    'region': region,
+                    'psi_24h': psi_value
+                }
 
-        # Reshape from wide to long format (one row per region)
-        region_columns = ['north', 'south', 'east', 'west', 'central']
-        id_vars = ['timestamp']
+                # Add PM2.5 if available
+                if 'pm25_twenty_four_hourly' in readings:
+                    record['pm25_24h'] = readings['pm25_twenty_four_hourly'].get(region)
 
-        if 'national' in df.columns:
-            region_columns.append('national')
+                # Add PM10 if available
+                if 'pm10_twenty_four_hourly' in readings:
+                    record['pm10_24h'] = readings['pm10_twenty_four_hourly'].get(region)
 
-        # Melt to long format
-        df_long = df.melt(
-            id_vars=id_vars,
-            value_vars=region_columns,
-            var_name='region',
-            value_name='psi_24h'
-        )
+                # Add O3 sub-index if available
+                if 'o3_sub_index' in readings:
+                    record['o3_sub_index'] = readings['o3_sub_index'].get(region)
 
-        # Convert PSI to numeric
-        df_long['psi_24h'] = pd.to_numeric(df_long['psi_24h'], errors='coerce')
+                # Add CO sub-index if available
+                if 'co_sub_index' in readings:
+                    record['co_sub_index'] = readings['co_sub_index'].get(region)
 
-        # Drop null values
-        df_long = df_long.dropna(subset=['psi_24h'])
+                # Add NO2 if available
+                if 'no2_one_hour_max' in readings:
+                    record['no2_1h_max'] = readings['no2_one_hour_max'].get(region)
 
-        return df_long
+                # Add SO2 if available
+                if 'so2_twenty_four_hourly' in readings:
+                    record['so2_24h'] = readings['so2_twenty_four_hourly'].get(region)
+
+                records.append(record)
+
+        return pd.DataFrame(records)
 
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching historical PSI: {e}")
+        print(f"Error fetching historical PSI for {date_str}: {e}")
         return pd.DataFrame()
 
 

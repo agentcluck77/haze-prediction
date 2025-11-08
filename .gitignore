@@ -1,7 +1,83 @@
-docs/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv
+venv/
+ENV/
 hacx/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Data files (large or sensitive)
+data/*.csv
+data/*.json
+data/*.parquet
+data/*.h5
+data/*.hdf5
+data/weather_grid/weather_grid.csv  # Large weather grid data (168MB)
+data/FIRMS_historical/  # Historical fire data
+data/PSI/  # Historical PSI data
+!data/.gitkeep
+!data/weather_grid/*.md  # Keep documentation
+
+# Benchmark reports
+benchmark_report.json
+benchmark/*.json
+!benchmark/.gitkeep
+
+# Docker
+.docker/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.cache
+
+# Node.js (for UI)
+ui-nextjs/node_modules/
+ui-nextjs/.next/
+ui-nextjs/out/
+ui-nextjs/.env.local
+ui-nextjs/.env.*.local
+ui-nextjs/npm-debug.log*
+ui-nextjs/yarn-debug.log*
+ui-nextjs/yarn-error.log*
+
+# Project specific
+docs/
 CLAUDE.md
 .claude/
-.pytest_cache/
-*/__pycache__/
 app/best_model.pth
+APIs/
+
+# OS
+.DS_Store
+Thumbs.db

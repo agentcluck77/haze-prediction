@@ -16,14 +16,14 @@ BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv'
 DEFAULT_BBOX = "95,-11,141,6"  # Indonesia
 
 
-def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_NOAA20_NRT'):
+def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_SNPP_NRT'):
     """
     Fetch recent fire detections from FIRMS API.
 
     Args:
         days: Number of days to fetch (1-10)
         bbox: Bounding box as "west,south,east,north" (default: Indonesia)
-        satellite: Satellite dataset (default: VIIRS_NOAA20_NRT)
+        satellite: Satellite dataset (default: VIIRS_SNPP_NRT - matches historical data)
 
     Returns:
         pandas.DataFrame: Fire detections with columns:

@@ -1,21 +1,102 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:15
+  # Main API service
+  api:
+    build: .
+    container_name: haze-prediction-api
+    ports:
+      - "8000:8000"
     environment:
-      POSTGRES_USER: hazeuser
-      POSTGRES_PASSWORD: testpassword
-      POSTGRES_DB: haze_prediction
+      - FIRMS_MAP_KEY=${FIRMS_MAP_KEY:-f6cd6de4fa5a42514a72c8525064e890}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://hazeuser:hazepass@db:5432/haze_prediction}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - haze-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # UI service
+  ui:
+    build:
+      context: ./ui-nextjs
+      dockerfile: Dockerfile
+    container_name: haze-prediction-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NODE_ENV=production
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - haze-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Scheduler service (background tasks)
+  scheduler:
+    build: .
+    container_name: haze-prediction-scheduler
+    command: python -m src.scheduler.tasks
+    environment:
+      - FIRMS_MAP_KEY=${FIRMS_MAP_KEY:-f6cd6de4fa5a42514a72c8525064e890}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://hazeuser:hazepass@db:5432/haze_prediction}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - haze-network
+
+  # PostgreSQL database
+  db:
+    image: postgres:15-alpine
+    container_name: haze-prediction-db
+    environment:
+      - POSTGRES_USER=hazeuser
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-hazepass}
+      - POSTGRES_DB=haze_prediction
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     ports:
       - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - haze-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hazeuser"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U hazeuser -d haze_prediction"]
+      interval: 10s
       timeout: 5s
       retries: 5
 
+networks:
+  haze-network:
+    driver: bridge
+
 volumes:
   postgres_data:
+    driver: local

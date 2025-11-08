@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { getPSICategory, formatDate } from '@/utils/psi';
@@ -18,32 +18,52 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
   const [fires, setFires] = useState<FiresResponse | null>(null);
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
 
+  const showLoadingRef = useRef(showLoading);
+  const hideLoadingRef = useRef(hideLoading);
+  const showToastRef = useRef(showToast);
+
+  // Update refs when callbacks change
   useEffect(() => {
+    showLoadingRef.current = showLoading;
+    hideLoadingRef.current = hideLoading;
+    showToastRef.current = showToast;
+  }, [showLoading, hideLoading, showToast]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadData = async () => {
+      if (!mounted) return;
+      showLoadingRef.current('Loading overview data...');
+      try {
+        const [psiData, predictionsData, firesData, weatherData] = await Promise.all([
+          api.getCurrentPSI().catch(() => null),
+          api.getAllPredictions().catch(() => null),
+          api.getCurrentFires().catch(() => null),
+          api.getCurrentWeather().catch(() => null),
+        ]);
+
+        if (!mounted) return;
+        if (psiData) setPsi(psiData);
+        if (predictionsData) setPredictions(predictionsData);
+        if (firesData) setFires(firesData);
+        if (weatherData) setWeather(weatherData);
+      } catch (error) {
+        if (!mounted) return;
+        showToastRef.current('Failed to load overview data', 'error');
+      } finally {
+        if (mounted) hideLoadingRef.current();
+      }
+    };
+
     loadData();
     const interval = setInterval(loadData, 300000); // Refresh every 5 minutes
-    return () => clearInterval(interval);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
-
-  const loadData = async () => {
-    showLoading('Loading overview data...');
-    try {
-      const [psiData, predictionsData, firesData, weatherData] = await Promise.all([
-        api.getCurrentPSI().catch(() => null),
-        api.getAllPredictions().catch(() => null),
-        api.getCurrentFires().catch(() => null),
-        api.getCurrentWeather().catch(() => null),
-      ]);
-
-      if (psiData) setPsi(psiData);
-      if (predictionsData) setPredictions(predictionsData);
-      if (firesData) setFires(firesData);
-      if (weatherData) setWeather(weatherData);
-    } catch (error) {
-      showToast('Failed to load overview data', 'error');
-    } finally {
-      hideLoading();
-    }
-  };
 
   const nationalPSI = psi?.readings?.psi_24h?.national || 0;
   const category = getPSICategory(nationalPSI);

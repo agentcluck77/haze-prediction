@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { getPSICategory, formatDate } from '@/utils/psi';
@@ -16,23 +16,43 @@ export default function PredictionsTab({ showLoading, hideLoading, showToast }: 
   const [selectedHorizon, setSelectedHorizon] = useState<Horizon | 'all'>('24h');
   const [prediction, setPrediction] = useState<PredictionResponse | AllPredictionsResponse | null>(null);
 
-  useEffect(() => {
-    loadPrediction();
-  }, [selectedHorizon]);
+  const showLoadingRef = useRef(showLoading);
+  const hideLoadingRef = useRef(hideLoading);
+  const showToastRef = useRef(showToast);
 
-  const loadPrediction = async () => {
-    showLoading('Loading prediction...');
-    try {
-      const data = selectedHorizon === 'all'
-        ? await api.getAllPredictions()
-        : await api.getPrediction(selectedHorizon);
-      setPrediction(data);
-    } catch (error) {
-      showToast('Failed to load prediction', 'error');
-    } finally {
-      hideLoading();
-    }
-  };
+  // Update refs when callbacks change
+  useEffect(() => {
+    showLoadingRef.current = showLoading;
+    hideLoadingRef.current = hideLoading;
+    showToastRef.current = showToast;
+  }, [showLoading, hideLoading, showToast]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPrediction = async () => {
+      if (!mounted) return;
+      showLoadingRef.current('Loading prediction...');
+      try {
+        const data = selectedHorizon === 'all'
+          ? await api.getAllPredictions()
+          : await api.getPrediction(selectedHorizon);
+        if (!mounted) return;
+        setPrediction(data);
+      } catch (error) {
+        if (!mounted) return;
+        showToastRef.current('Failed to load prediction', 'error');
+      } finally {
+        if (mounted) hideLoadingRef.current();
+      }
+    };
+
+    loadPrediction();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedHorizon]);
 
   const horizons: (Horizon | 'all')[] = ['24h', '48h', '72h', '7d', 'all'];
 

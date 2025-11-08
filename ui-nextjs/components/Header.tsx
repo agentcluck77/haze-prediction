@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApi } from '@/contexts/ApiContext';
 import { api } from '@/lib/api';
 import type { HealthResponse } from '@/types/api';
@@ -13,45 +13,60 @@ export default function Header({ showToast }: HeaderProps) {
   const { baseURL, setBaseURL } = useApi();
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const showToastRef = useRef(showToast);
 
-  const loadHealth = useCallback(async () => {
-    setIsChecking(true);
-    try {
-      const healthData = await api.getHealth();
-      setHealth(healthData);
-      setIsChecking(false);
-      
-      if (healthData.status === 'unhealthy' && healthData.issues) {
-        showToast(`System unhealthy: ${healthData.issues.join(', ')}`, 'error');
-      }
-    } catch (error) {
-      // Set health to unhealthy on error
-      setHealth(prevHealth => {
-        // Only show toast on first error to avoid spam
-        if (!prevHealth) {
-          showToast('Failed to connect to API server', 'error');
-        }
-        
-        return { 
-          status: 'unhealthy' as const, 
-          timestamp: new Date().toISOString(),
-          issues: [error instanceof Error ? error.message : 'Failed to connect to API']
-        } as HealthResponse;
-      });
-      setIsChecking(false);
-    }
+  // Update ref when showToast changes
+  useEffect(() => {
+    showToastRef.current = showToast;
   }, [showToast]);
 
   useEffect(() => {
+    let mounted = true;
+
+    const loadHealth = async () => {
+      if (!mounted) return;
+      setIsChecking(true);
+      try {
+        const healthData = await api.getHealth();
+        if (!mounted) return;
+        setHealth(healthData);
+        setIsChecking(false);
+
+        if (healthData.status === 'unhealthy' && healthData.issues) {
+          showToastRef.current(`System unhealthy: ${healthData.issues.join(', ')}`, 'error');
+        }
+      } catch (error) {
+        if (!mounted) return;
+        // Set health to unhealthy on error
+        setHealth(prevHealth => {
+          // Only show toast on first error to avoid spam
+          if (!prevHealth) {
+            showToastRef.current('Failed to connect to API server', 'error');
+          }
+
+          return {
+            status: 'unhealthy' as const,
+            timestamp: new Date().toISOString(),
+            issues: [error instanceof Error ? error.message : 'Failed to connect to API']
+          } as HealthResponse;
+        });
+        setIsChecking(false);
+      }
+    };
+
     loadHealth();
     const interval = setInterval(loadHealth, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, [baseURL, loadHealth]);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [baseURL]);
 
   const handleServerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setBaseURL(e.target.value);
     showToast('Server changed. Refreshing...', 'info');
-    loadHealth();
+    // Health check will automatically re-run when baseURL changes
   };
 
   const getStatusColor = (status: string) => {

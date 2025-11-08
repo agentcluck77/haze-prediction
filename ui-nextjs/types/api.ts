@@ -292,3 +292,32 @@ export interface ErrorResponse {
   details?: Record<string, unknown>;
 }
 
+export interface HorizonEvaluation {
+  mae: number;
+  rmse: number;
+  baseline_mae: number;
+  improvement_pct: number;
+  samples: number;
+  coefficients: {
+    fire_risk: number;
+    wind_transport: number;
+    baseline: number;
+    intercept: number;
+  };
+}
+
+export interface EvaluationResponse {
+  test_period: {
+    start_date: string;
+    end_date: string;
+    sample_hours: number;
+  };
+  results: {
+    '24h': HorizonEvaluation;
+    '48h': HorizonEvaluation;
+    '72h': HorizonEvaluation;
+    '7d': HorizonEvaluation;
+  };
+  timestamp: string;
+}
+

@@ -12,6 +12,7 @@ import type {
   BenchmarkJobRequest,
   BenchmarkJobResponse,
   BenchmarkJobStatus,
+  EvaluationResponse,
   Horizon,
   ConfidenceLevel,
   ErrorResponse,
@@ -28,7 +29,7 @@ class HazeAPI {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 30000,
+      timeout: 5000, // 5 seconds - fail fast for better UX
     });
 
     // Add response interceptor for error handling
@@ -125,6 +126,19 @@ class HazeAPI {
 
   async getModelDrift(): Promise<DriftResponse> {
     const response = await this.client.get<DriftResponse>('/metrics/drift');
+    return response.data;
+  }
+
+  async evaluateModels(
+    startDate?: string,
+    endDate?: string,
+    sampleHours: number = 1
+  ): Promise<EvaluationResponse> {
+    const params: Record<string, string | number> = { sample_hours: sampleHours };
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+
+    const response = await this.client.get<EvaluationResponse>('/evaluate', { params });
     return response.data;
   }
 

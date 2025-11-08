@@ -1,0 +1,7 @@
+docs/
+hacx/
+CLAUDE.md
+.claude/
+.pytest_cache/
+*/__pycache__/
+app/best_model.pth

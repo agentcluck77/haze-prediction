@@ -1,0 +1,1 @@
+Haze detection model for satellite images

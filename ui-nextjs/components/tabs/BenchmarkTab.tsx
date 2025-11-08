@@ -34,11 +34,7 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
 
       const result = await api.startBenchmark(request);
       showToast('Benchmark started successfully', 'success');
-      
-      const newJobs = new Map(jobs);
-      newJobs.set(result.job_id, { ...result, status: result.status } as BenchmarkJobStatus);
-      setJobs(newJobs);
-      
+
       pollBenchmarkStatus(result.job_id);
     } catch (error) {
       showToast('Failed to start benchmark', 'error');

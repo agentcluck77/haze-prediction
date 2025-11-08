@@ -1,0 +1,11 @@
+bbox:
+- 103.6
+- 1.2
+- 104.1
+- 1.5
+center:
+  latitude: 1.35
+  longitude: 103.85
+filename: test_tile.png
+size_px: 512
+test_mode: true

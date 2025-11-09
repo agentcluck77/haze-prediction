@@ -41,12 +41,9 @@ data/*.json
 data/*.parquet
 data/*.h5
 data/*.hdf5
-data/weather_grid/weather_grid.csv  # Large weather grid data (168MB)
-data/FIRMS_historical/  # Historical fire data
-data/PSI/  # Historical PSI data
-data/weather/f7fc7094c3a622b1b783338b67446c0f.grib
 !data/.gitkeep
 !data/weather_grid/*.md  # Keep documentation
+!data/cache/README.md  # Keep cache documentation
 
 # Benchmark reports
 benchmark_report.json
@@ -78,11 +75,9 @@ CLAUDE.md
 .claude/
 app/best_model.pth
 APIs/
-data/weather_grid/weather_grid.csv
 
 # OS
 .DS_Store
 Thumbs.db
 
-data/weather/*
 archive/

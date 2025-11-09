@@ -10,8 +10,48 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.training.data_preparation import prepare_training_dataset
 from src.training.model_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, accuracy_score, precision_recall_fscore_support
 import pandas as pd
+
+
+def psi_to_category(psi_value):
+    """
+    Convert PSI value to health category
+
+    Categories based on Singapore NEA standards:
+    - 0-50: Good
+    - 51-100: Moderate
+    - 101-200: Unhealthy
+    - 201-300: Very Unhealthy
+    - 301+: Hazardous
+
+    Args:
+        psi_value: PSI value (float or array)
+
+    Returns:
+        int or array: Category index (0-4)
+    """
+    if isinstance(psi_value, (pd.Series, np.ndarray)):
+        return pd.cut(
+            psi_value,
+            bins=[-np.inf, 50, 100, 200, 300, np.inf],
+            labels=[0, 1, 2, 3, 4],
+            include_lowest=True
+        ).astype(int)
+    else:
+        if psi_value <= 50:
+            return 0  # Good
+        elif psi_value <= 100:
+            return 1  # Moderate
+        elif psi_value <= 200:
+            return 2  # Unhealthy
+        elif psi_value <= 300:
+            return 3  # Very Unhealthy
+        else:
+            return 4  # Hazardous
+
+
+CATEGORY_NAMES = ['Good', 'Moderate', 'Unhealthy', 'Very Unhealthy', 'Hazardous']
 
 
 def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_hours=1, verbose=True):
@@ -88,7 +128,7 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             # Make predictions
             y_pred = model.predict(X_test)
 
-            # Calculate metrics
+            # Calculate regression metrics
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 
@@ -96,17 +136,41 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             baseline_pred = test_df['baseline_score'] * 5.0  # Convert back to PSI
             baseline_mae = mean_absolute_error(y_test, baseline_pred)
 
+            # Calculate classification metrics (PSI categories)
+            y_test_cat = psi_to_category(y_test)
+            y_pred_cat = psi_to_category(y_pred)
+
+            accuracy = accuracy_score(y_test_cat, y_pred_cat)
+            precision, recall, f1, _ = precision_recall_fscore_support(
+                y_test_cat,
+                y_pred_cat,
+                average='weighted',
+                zero_division=0
+            )
+
+            # Calculate improvement percentage (handle division by zero)
+            if baseline_mae > 0:
+                improvement_pct = float((1 - mae/baseline_mae)*100)
+            else:
+                improvement_pct = 0.0
+
             results[horizon] = {
                 'mae': float(mae),
                 'rmse': float(rmse),
                 'baseline_mae': float(baseline_mae),
-                'improvement_pct': float((1 - mae/baseline_mae)*100),
+                'improvement_pct': improvement_pct,
                 'samples': int(len(y_test)),
                 'coefficients': {
                     'fire_risk': float(model.coef_[0]),
                     'wind_transport': float(model.coef_[1]),
                     'baseline': float(model.coef_[2]),
                     'intercept': float(model.intercept_)
+                },
+                'classification': {
+                    'accuracy': float(accuracy),
+                    'precision': float(precision),
+                    'recall': float(recall),
+                    'f1_score': float(f1)
                 }
             }
 
@@ -115,6 +179,8 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
                 print(f"  Test RMSE: {rmse:.2f} PSI")
                 print(f"  Baseline MAE: {baseline_mae:.2f} PSI")
                 print(f"  Improvement: {baseline_mae - mae:.2f} PSI ({(1 - mae/baseline_mae)*100:.1f}%)")
+                print(f"  Classification Accuracy: {accuracy*100:.1f}%")
+                print(f"  F1 Score: {f1:.3f}")
 
         except Exception as e:
             if verbose:
@@ -132,14 +198,15 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             print("\nNo models evaluated successfully!")
         else:
             # Create summary table
-            print(f"\n{'Horizon':<10} {'Test MAE':<12} {'Baseline MAE':<15} {'Improvement':<12} {'Samples':<10}")
-            print("-" * 70)
+            print(f"\n{'Horizon':<10} {'Test MAE':<12} {'Baseline MAE':<15} {'Improvement':<12} {'Accuracy':<12} {'F1 Score':<12} {'Samples':<10}")
+            print("-" * 90)
 
             for horizon in VALID_HORIZONS:
                 if horizon in results:
                     r = results[horizon]
                     print(f"{horizon:<10} {r['mae']:<12.2f} {r['baseline_mae']:<15.2f} "
-                          f"{r['improvement_pct']:<12.1f}% {r['samples']:<10}")
+                          f"{r['improvement_pct']:<12.1f}% {r['classification']['accuracy']*100:<12.1f}% "
+                          f"{r['classification']['f1_score']:<12.3f} {r['samples']:<10}")
 
             # Print model coefficients
             print("\n" + "=" * 70)

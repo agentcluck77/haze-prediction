@@ -1,15 +1,17 @@
 """
-Historical fire data loader from local VIIRS SNPP CSV files.
+Historical fire data loader from local MODIS or VIIRS CSV files.
 Implements Option 1: Load all data into memory for fast lookups.
 """
 
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+import os
 
 
-# Path to FIRMS historical data
-FIRE_DATA_DIR = Path(__file__).parent.parent.parent / "data" / "FIRMS_historical"
+# Get satellite data source from environment or use default
+FIRE_DATA_SOURCE = os.getenv('FIRE_DATA_SOURCE', 'FIRM_MODIS')
+FIRE_DATA_DIR = Path(__file__).parent.parent.parent / "data" / FIRE_DATA_SOURCE
 
 # Global cache for fire data (loaded once)
 _FIRE_DATA_CACHE = None
@@ -19,8 +21,9 @@ def load_all_historical_fires():
     """
     Load all historical fire data from local CSV files into memory.
 
-    Loads VIIRS SNPP data for 2016-2024 covering Indonesia and Malaysia.
+    Loads MODIS or VIIRS data for 2016-2024 covering Indonesia and Malaysia.
     Singapore data is excluded as it has negligible fire detections.
+    Data source is configured via FIRE_DATA_SOURCE environment variable.
 
     Returns:
         pandas.DataFrame: All fire detections with columns:
@@ -32,7 +35,7 @@ def load_all_historical_fires():
     if _FIRE_DATA_CACHE is not None:
         return _FIRE_DATA_CACHE
 
-    print("Loading historical fire data from local CSV files...")
+    print(f"Loading historical fire data from {FIRE_DATA_SOURCE}...")
 
     # Find all CSV files
     csv_files = sorted(FIRE_DATA_DIR.glob("*.csv"))
@@ -57,6 +60,7 @@ def load_all_historical_fires():
         df = pd.read_csv(csv_file)
 
         # Standardize column names to match expected format
+        # VIIRS uses 'bright_ti4', MODIS uses 'brightness'
         df = df.rename(columns={
             'bright_ti4': 'brightness',
         })
@@ -74,6 +78,7 @@ def load_all_historical_fires():
     all_fires = pd.concat(dataframes, ignore_index=True)
 
     print(f"Loaded {total_records:,} fire records from 2016-2024")
+    print(f"Data source: {FIRE_DATA_SOURCE}")
     print(f"Memory usage: ~{all_fires.memory_usage(deep=True).sum() / (1024**2):.1f} MB")
 
     # Cache for future use

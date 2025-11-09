@@ -14,24 +14,29 @@ from sqlalchemy.exc import IntegrityError
 MAP_KEY = os.getenv('FIRMS_MAP_KEY', 'f6cd6de4fa5a42514a72c8525064e890')
 BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv'
 DEFAULT_BBOX = "95,-11,141,6"  # Indonesia
+DEFAULT_SATELLITE = os.getenv('FIRMS_SATELLITE', 'MODIS_NRT')
 
 
-def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_SNPP_NRT'):
+def fetch_recent_fires(days=1, bbox=None, satellite=None):
     """
     Fetch recent fire detections from FIRMS API.
 
     Args:
         days: Number of days to fetch (1-10)
         bbox: Bounding box as "west,south,east,north" (default: Indonesia)
-        satellite: Satellite dataset (default: VIIRS_SNPP_NRT - matches historical data)
+        satellite: Satellite dataset (default: from FIRMS_SATELLITE env var, or MODIS_NRT)
+                  Options: MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT
 
     Returns:
         pandas.DataFrame: Fire detections with columns:
             latitude, longitude, frp, brightness, confidence,
-            acq_date, acq_time, satellite
+            acq_date, acq_time, satellite, acq_datetime, distance_to_singapore_km
     """
     if bbox is None:
         bbox = DEFAULT_BBOX
+
+    if satellite is None:
+        satellite = DEFAULT_SATELLITE
 
     url = f"{BASE_URL}/{MAP_KEY}/{satellite}/{bbox}/{days}"
 
@@ -47,7 +52,8 @@ def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_SNPP_NRT'):
         if len(df) == 0:
             return pd.DataFrame(columns=[
                 'latitude', 'longitude', 'frp', 'brightness',
-                'confidence', 'acq_date', 'acq_time', 'satellite'
+                'confidence', 'acq_date', 'acq_time', 'satellite',
+                'acq_datetime', 'distance_to_singapore_km'
             ])
 
         # Standardize column names
@@ -62,13 +68,52 @@ def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_SNPP_NRT'):
         if 'satellite' not in df.columns:
             df['satellite'] = satellite
 
+        # Convert numeric confidence to letter code (l/n/h)
+        def confidence_to_letter(conf):
+            """Convert numeric confidence (0-100) to letter code"""
+            if pd.isna(conf):
+                return 'n'
+            conf_num = float(conf)
+            if conf_num >= 80:
+                return 'h'
+            elif conf_num >= 50:
+                return 'n'
+            else:
+                return 'l'
+
+        # Vectorize confidence conversion for speed
+        if 'confidence' in df.columns:
+            df['confidence'] = df['confidence'].apply(confidence_to_letter)
+
+        # Vectorize acq_datetime creation for speed
+        df['acq_datetime'] = pd.to_datetime(df['acq_date']) + pd.to_timedelta(
+            df['acq_time'].astype(str).str.zfill(4).str[:2].astype(int), unit='h'
+        ) + pd.to_timedelta(
+            df['acq_time'].astype(str).str.zfill(4).str[2:].astype(int), unit='m'
+        )
+
+        # Vectorize distance calculation for speed using numpy
+        import numpy as np
+        singapore_lat, singapore_lon = 1.3521, 103.8198
+
+        # Haversine distance (vectorized)
+        lat1_rad = np.radians(singapore_lat)
+        lat2_rad = np.radians(df['latitude'].values)
+        dlat = np.radians(df['latitude'].values - singapore_lat)
+        dlon = np.radians(df['longitude'].values - singapore_lon)
+
+        a = np.sin(dlat/2)**2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon/2)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        df['distance_to_singapore_km'] = 6371 * c  # Earth radius in km
+
         return df
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching FIRMS data: {e}")
         return pd.DataFrame(columns=[
             'latitude', 'longitude', 'frp', 'brightness',
-            'confidence', 'acq_date', 'acq_time', 'satellite'
+            'confidence', 'acq_date', 'acq_time', 'satellite',
+            'acq_datetime', 'distance_to_singapore_km'
         ])
 
 

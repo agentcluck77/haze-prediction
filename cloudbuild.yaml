@@ -2,6 +2,18 @@
 # Triggers on push to main branch
 
 steps:
+  # Step 0: Install Git LFS and fetch files
+  - name: 'ubuntu'
+    id: 'fetch-lfs-files'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        apt-get update && apt-get install -y git-lfs
+        git lfs install
+        git lfs pull
+    timeout: 300s
+
   # Step 1: Build Docker image for API
   - name: 'gcr.io/cloud-builders/docker'
     id: 'build-api-image'

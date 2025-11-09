@@ -4,11 +4,12 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including git-lfs for LFS files)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
+    git-lfs \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
@@ -22,8 +23,8 @@ COPY src/ ./src/
 COPY models/ ./models/
 COPY train_models.py .
 
-# Create data directory
-RUN mkdir -p /app/data
+# Copy data files (Git LFS files should already be fetched by Cloud Build)
+COPY data/ ./data/
 
 # Expose port
 EXPOSE 8000

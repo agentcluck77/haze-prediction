@@ -30,7 +30,7 @@ def fetch_recent_fires(days=1, bbox=None, satellite=None):
     Returns:
         pandas.DataFrame: Fire detections with columns:
             latitude, longitude, frp, brightness, confidence,
-            acq_date, acq_time, satellite
+            acq_date, acq_time, satellite, acq_datetime, distance_to_singapore_km
     """
     if bbox is None:
         bbox = DEFAULT_BBOX
@@ -52,7 +52,8 @@ def fetch_recent_fires(days=1, bbox=None, satellite=None):
         if len(df) == 0:
             return pd.DataFrame(columns=[
                 'latitude', 'longitude', 'frp', 'brightness',
-                'confidence', 'acq_date', 'acq_time', 'satellite'
+                'confidence', 'acq_date', 'acq_time', 'satellite',
+                'acq_datetime', 'distance_to_singapore_km'
             ])
 
         # Standardize column names
@@ -67,13 +68,31 @@ def fetch_recent_fires(days=1, bbox=None, satellite=None):
         if 'satellite' not in df.columns:
             df['satellite'] = satellite
 
+        # Add acq_datetime column by combining acq_date and acq_time
+        df['acq_datetime'] = df.apply(
+            lambda row: parse_acquisition_datetime(row['acq_date'], row['acq_time']),
+            axis=1
+        )
+
+        # Add distance_to_singapore_km column
+        from src.features.geospatial import haversine_distance
+        singapore_coords = (1.3521, 103.8198)
+        df['distance_to_singapore_km'] = df.apply(
+            lambda row: haversine_distance(
+                singapore_coords,
+                (row['latitude'], row['longitude'])
+            ),
+            axis=1
+        )
+
         return df
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching FIRMS data: {e}")
         return pd.DataFrame(columns=[
             'latitude', 'longitude', 'frp', 'brightness',
-            'confidence', 'acq_date', 'acq_time', 'satellite'
+            'confidence', 'acq_date', 'acq_time', 'satellite',
+            'acq_datetime', 'distance_to_singapore_km'
         ])
 
 

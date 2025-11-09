@@ -155,22 +155,8 @@ def predict_psi(horizon: str = '24h', models_dir: str = 'models') -> dict:
     except FileNotFoundError:
         raise
     except Exception as e:
-        # If data fetching fails, use fallback values
-        # This allows graceful degradation
-        return {
-            'prediction': 50.0,
-            'confidence_interval': [30.0, 70.0],
-            'features': {
-                'fire_risk_score': 0.0,
-                'wind_transport_score': 0.0,
-                'baseline_score': 50.0
-            },
-            'timestamp': datetime.now().isoformat(),
-            'target_timestamp': (datetime.now() + timedelta(hours=HORIZON_HOURS[horizon])).isoformat(),
-            'horizon': horizon,
-            'model_version': 'phase1_linear_v1.0_fallback',
-            'error': str(e)
-        }
+        # Raise exception instead of returning fallback values
+        raise RuntimeError(f"Prediction failed for {horizon}: {str(e)}") from e
 
 
 def predict_all_horizons(models_dir: str = 'models') -> dict:

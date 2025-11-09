@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wind Vector Field Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .controls button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .controls button:hover {
+            background: #0056b3;
+        }
+        .controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .legend-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        .legend-arrow {
+            width: 30px;
+            height: 20px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button id="refreshBtn">Refresh Wind Data</button>
+        <div class="info">
+            <div>Last updated: <span id="timestamp">-</span></div>
+            <div>Total vectors: <span id="vectorCount">0</span></div>
+            <div id="autoLoadIndicator" style="display: none; color: #2196F3; font-size: 11px;">
+                ⟳ Auto-loading...
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-title">Wind Speed (m/s)</div>
+        <div class="legend-item">
+            <canvas class="legend-arrow" id="legend1"></canvas>
+            <span>0-5 (Light)</span>
+        </div>
+        <div class="legend-item">
+            <canvas class="legend-arrow" id="legend2"></canvas>
+            <span>5-10 (Moderate)</span>
+        </div>
+        <div class="legend-item">
+            <canvas class="legend-arrow" id="legend3"></canvas>
+            <span>10+ (Strong)</span>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize the map centered on Indonesia-Malaysia-Singapore for haze tracking
+        const map = L.map('map').setView([1.5, 102.5], 6);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Custom layer for wind vectors
+        const WindVectorLayer = L.Layer.extend({
+            initialize: function(windData) {
+                this.windData = windData;
+            },
+
+            onAdd: function(map) {
+                this._map = map;
+                const pane = map.getPane('overlayPane');
+                this._canvas = L.DomUtil.create('canvas', 'wind-vector-canvas', pane);
+                this._canvas.style.position = 'absolute';
+                this._canvas.style.pointerEvents = 'auto';
+                this._canvas.style.cursor = 'pointer';
+
+                // Add click event listener
+                L.DomEvent.on(this._canvas, 'click', this._onCanvasClick, this);
+
+                this._updateCanvas();
+                map.on('moveend', this._updateCanvas, this);
+                map.on('move', this._updateCanvas, this);
+                map.on('zoom', this._updateCanvas, this);
+                map.on('zoomend', this._updateCanvas, this);
+                map.on('viewreset', this._updateCanvas, this);
+            },
+
+            onRemove: function(map) {
+                L.DomEvent.off(this._canvas, 'click', this._onCanvasClick, this);
+                L.DomUtil.remove(this._canvas);
+                map.off('moveend', this._updateCanvas, this);
+                map.off('move', this._updateCanvas, this);
+                map.off('zoom', this._updateCanvas, this);
+                map.off('zoomend', this._updateCanvas, this);
+                map.off('viewreset', this._updateCanvas, this);
+            },
+
+            _onCanvasClick: function(e) {
+                const bounds = this._map.getBounds();
+                const topLeft = this._map.latLngToLayerPoint(bounds.getNorthWest());
+
+                // Get click position relative to canvas
+                const rect = this._canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                // Find the closest wind vector within a reasonable distance (20 pixels)
+                let closestPoint = null;
+                let closestDistance = 20; // Click radius threshold
+
+                this.windData.forEach(point => {
+                    const latLng = L.latLng(point.lat, point.lon);
+                    const pixel = this._map.latLngToLayerPoint(latLng);
+                    const canvasX = pixel.x - topLeft.x;
+                    const canvasY = pixel.y - topLeft.y;
+
+                    const distance = Math.sqrt(
+                        Math.pow(clickX - canvasX, 2) +
+                        Math.pow(clickY - canvasY, 2)
+                    );
+
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestPoint = point;
+                    }
+                });
+
+                if (closestPoint) {
+                    // Convert m/s to km/h
+                    const speedKmh = (closestPoint.speed * 3.6).toFixed(1);
+                    const speedMs = closestPoint.speed.toFixed(1);
+
+                    // Direction compass labels
+                    const directionLabel = this._getDirectionLabel(closestPoint.direction);
+
+                    const popupContent = `
+                        <div style="text-align: center;">
+                            <strong>Wind Data</strong><br>
+                            <strong style="font-size: 18px; color: #2196F3;">${speedKmh} km/h</strong><br>
+                            <span style="font-size: 12px; color: #666;">${speedMs} m/s</span><br>
+                            <span style="font-size: 14px;">Direction: ${directionLabel} (${Math.round(closestPoint.direction)}°)</span><br>
+                            <span style="font-size: 11px; color: #999;">Lat: ${closestPoint.lat.toFixed(3)}, Lon: ${closestPoint.lon.toFixed(3)}</span>
+                        </div>
+                    `;
+
+                    L.popup()
+                        .setLatLng([closestPoint.lat, closestPoint.lon])
+                        .setContent(popupContent)
+                        .openOn(this._map);
+                }
+
+                // Stop event propagation to prevent map panning
+                L.DomEvent.stopPropagation(e);
+            },
+
+            _getDirectionLabel: function(degrees) {
+                // Convert wind direction to compass direction
+                const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                                   'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+                const index = Math.round(((degrees % 360) / 22.5)) % 16;
+                return directions[index];
+            },
+
+            _updateCanvas: function() {
+                const size = this._map.getSize();
+                const bounds = this._map.getBounds();
+                const topLeft = this._map.latLngToLayerPoint(bounds.getNorthWest());
+
+                // Position canvas at the map's current view origin
+                L.DomUtil.setPosition(this._canvas, topLeft);
+
+                this._canvas.width = size.x;
+                this._canvas.height = size.y;
+
+                const ctx = this._canvas.getContext('2d');
+                ctx.clearRect(0, 0, size.x, size.y);
+
+                // Draw wind vectors
+                this.windData.forEach(point => {
+                    const latLng = L.latLng(point.lat, point.lon);
+                    const pixel = this._map.latLngToLayerPoint(latLng);
+
+                    // Convert from layer point to canvas coordinates
+                    const canvasX = pixel.x - topLeft.x;
+                    const canvasY = pixel.y - topLeft.y;
+
+                    this._drawWindVector(ctx, canvasX, canvasY, point.speed, point.direction);
+                });
+            },
+
+            _drawWindVector: function(ctx, x, y, speed, direction) {
+                // Convert direction to radians (meteorological convention: direction FROM which wind blows)
+                // We need to rotate by 180 degrees and convert to math convention
+                const angle = ((direction + 180) % 360) * Math.PI / 180;
+
+                // Scale arrow length based on wind speed
+                const length = Math.min(speed * 4, 100);
+
+                // Color based on speed
+                let color;
+                if (speed < 5) {
+                    color = '#4CAF50'; // Green for light winds
+                } else if (speed < 10) {
+                    color = '#FFC107'; // Yellow for moderate winds
+                } else {
+                    color = '#F44336'; // Red for strong winds
+                }
+
+                ctx.strokeStyle = color;
+                ctx.fillStyle = color;
+                ctx.lineWidth = 2;
+
+                // Draw arrow shaft
+                const endX = x + length * Math.cos(angle);
+                const endY = y + length * Math.sin(angle);
+
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+
+                // Draw arrowhead
+                const headLength = 8;
+                const headAngle = Math.PI / 6;
+
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                    endX - headLength * Math.cos(angle - headAngle),
+                    endY - headLength * Math.sin(angle - headAngle)
+                );
+                ctx.lineTo(
+                    endX - headLength * Math.cos(angle + headAngle),
+                    endY - headLength * Math.sin(angle + headAngle)
+                );
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw a small circle at the origin
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            },
+
+            setWindData: function(windData) {
+                this.windData = windData;
+                if (this._map) {
+                    this._updateCanvas();
+                }
+            }
+        });
+
+        let windLayer = null;
+        let fetchTimeout = null;
+        let isLoading = false;
+
+        // Fetch and display wind data with dynamic bounds and zoom
+        async function fetchWindData(auto = false) {
+            if (isLoading && auto) return; // Skip if already loading and this is an auto-refresh
+
+            const btn = document.getElementById('refreshBtn');
+            const autoIndicator = document.getElementById('autoLoadIndicator');
+
+            if (auto) {
+                autoIndicator.style.display = 'block';
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'Loading...';
+            }
+
+            isLoading = true;
+
+            try {
+                // Get current map bounds and zoom
+                const bounds = map.getBounds();
+                const zoom = map.getZoom();
+
+                // Build query parameters
+                const params = new URLSearchParams({
+                    south: bounds.getSouth(),
+                    north: bounds.getNorth(),
+                    west: bounds.getWest(),
+                    east: bounds.getEast(),
+                    zoom: zoom
+                });
+
+                const response = await fetch(`/api/wind?${params}`);
+                const result = await response.json();
+
+                document.getElementById('timestamp').textContent =
+                    new Date(result.timestamp).toLocaleTimeString();
+                document.getElementById('vectorCount').textContent = result.data.length;
+
+                if (windLayer) {
+                    windLayer.setWindData(result.data);
+                } else {
+                    windLayer = new WindVectorLayer(result.data);
+                    windLayer.addTo(map);
+                }
+
+            } catch (error) {
+                console.error('Error fetching wind data:', error);
+                if (!auto) {
+                    alert('Failed to fetch wind data. Check console for details.');
+                }
+            } finally {
+                isLoading = false;
+                const autoIndicator = document.getElementById('autoLoadIndicator');
+                if (auto) {
+                    autoIndicator.style.display = 'none';
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Refresh Wind Data';
+                }
+            }
+        }
+
+        // Debounced fetch on map movement/zoom
+        function scheduleAutoFetch() {
+            if (fetchTimeout) {
+                clearTimeout(fetchTimeout);
+            }
+            // Wait 1.5 seconds after user stops moving/zooming before fetching
+            fetchTimeout = setTimeout(() => {
+                fetchWindData(true);
+            }, 1500);
+        }
+
+        // Draw legend arrows
+        function drawLegendArrows() {
+            const legends = [
+                { id: 'legend1', color: '#4CAF50' },
+                { id: 'legend2', color: '#FFC107' },
+                { id: 'legend3', color: '#F44336' }
+            ];
+
+            legends.forEach(legend => {
+                const canvas = document.getElementById(legend.id);
+                const ctx = canvas.getContext('2d');
+                ctx.strokeStyle = legend.color;
+                ctx.fillStyle = legend.color;
+                ctx.lineWidth = 2;
+
+                // Draw arrow
+                ctx.beginPath();
+                ctx.moveTo(5, 10);
+                ctx.lineTo(25, 10);
+                ctx.stroke();
+
+                // Arrowhead
+                ctx.beginPath();
+                ctx.moveTo(25, 10);
+                ctx.lineTo(20, 7);
+                ctx.lineTo(20, 13);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', () => fetchWindData(false));
+
+        // Auto-refresh on zoom/move (debounced)
+        map.on('zoomend', scheduleAutoFetch);
+        map.on('moveend', scheduleAutoFetch);
+
+        // Initialize
+        drawLegendArrows();
+        fetchWindData(false);
+    </script>
+</body>
+</html>

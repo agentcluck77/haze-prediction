@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import numpy as np
 from typing import Optional
+import os
 
 from src.training.model_trainer import load_model
 from src.data_ingestion.firms import fetch_recent_fires
@@ -15,6 +16,10 @@ from src.data_ingestion.psi import fetch_current_psi
 from src.features.fire_risk import calculate_fire_risk_score
 from src.features.wind_transport import calculate_wind_transport_score, cluster_fires
 from src.features.baseline import calculate_baseline_score
+
+
+# Get satellite from environment or use default
+FIRMS_SATELLITE = os.getenv('FIRMS_SATELLITE', 'MODIS_NRT')
 
 
 VALID_HORIZONS = ['24h', '48h', '72h', '7d']
@@ -61,7 +66,7 @@ def predict_psi(horizon: str = '24h', models_dir: str = 'models') -> dict:
 
     try:
         # 1. Fetch latest data
-        fires = fetch_recent_fires(days=1)
+        fires = fetch_recent_fires(days=1, satellite=FIRMS_SATELLITE)
         weather = fetch_weather_forecast(
             latitude=1.3521,
             longitude=103.8198,

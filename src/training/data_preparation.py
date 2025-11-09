@@ -8,6 +8,7 @@ import numpy as np
 from datetime import timedelta
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
+import os
 from src.features.fire_risk import calculate_fire_risk_score
 from src.features.wind_transport import calculate_wind_transport_score, cluster_fires
 from src.features.baseline import calculate_baseline_score
@@ -240,17 +241,23 @@ def prepare_training_dataset(start_date, end_date, sample_hours=24, use_cache=Tr
     Returns:
         pandas.DataFrame: Training dataset with features and targets
     """
+    # Include data source in cache key to avoid mixing MODIS and VIIRS data
+    data_source = os.getenv('FIRE_DATA_SOURCE', 'FIRM_MODIS')
+    # Sanitize data source for filename (replace slashes and hyphens)
+    data_source_key = data_source.replace('/', '_').replace('-', '_')
+
     # Check for cached features
-    cache_file = Path(__file__).parent.parent.parent / "data" / "cache" / f"training_{start_date}_{end_date}_h{sample_hours}.csv"
+    cache_file = Path(__file__).parent.parent.parent / "data" / "cache" / f"training_{start_date}_{end_date}_h{sample_hours}_{data_source_key}.csv"
 
     if use_cache and cache_file.exists() and not force_rebuild:
         print(f"Loading cached features from {cache_file.name}...")
         df = pd.read_csv(cache_file)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
-        print(f"✓ Loaded {len(df)} cached samples")
+        print(f"✓ Loaded {len(df)} cached samples (data source: {data_source})")
         return df
 
     print(f"Preparing training dataset from scratch...")
+    print(f"Data source: {data_source}")
     print(f"(This will be cached for future use)")
 
     from src.training.historical_data import fetch_historical_psi_range

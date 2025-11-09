@@ -42,11 +42,15 @@ data/*.parquet
 data/*.h5
 data/*.hdf5
 data/weather_grid/weather_grid.csv  # Large weather grid data (168MB)
-data/FIRMS_historical/  # Historical fire data
+data/FIRMS_historical/  # Historical fire data (old VIIRS)
+data/FIRMS_VIIRS-SNPP/  # VIIRS SNPP fire data
+data/FIRM_MODIS/  # MODIS fire data
 data/PSI/  # Historical PSI data
+data/cache/*.csv  # Cached training data
 data/weather/f7fc7094c3a622b1b783338b67446c0f.grib
 !data/.gitkeep
 !data/weather_grid/*.md  # Keep documentation
+!data/cache/README.md  # Keep cache documentation
 
 # Benchmark reports
 benchmark_report.json

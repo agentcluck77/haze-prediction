@@ -14,16 +14,18 @@ from sqlalchemy.exc import IntegrityError
 MAP_KEY = os.getenv('FIRMS_MAP_KEY', 'f6cd6de4fa5a42514a72c8525064e890')
 BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv'
 DEFAULT_BBOX = "95,-11,141,6"  # Indonesia
+DEFAULT_SATELLITE = os.getenv('FIRMS_SATELLITE', 'MODIS_NRT')
 
 
-def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_SNPP_NRT'):
+def fetch_recent_fires(days=1, bbox=None, satellite=None):
     """
     Fetch recent fire detections from FIRMS API.
 
     Args:
         days: Number of days to fetch (1-10)
         bbox: Bounding box as "west,south,east,north" (default: Indonesia)
-        satellite: Satellite dataset (default: VIIRS_SNPP_NRT - matches historical data)
+        satellite: Satellite dataset (default: from FIRMS_SATELLITE env var, or MODIS_NRT)
+                  Options: MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT
 
     Returns:
         pandas.DataFrame: Fire detections with columns:
@@ -32,6 +34,9 @@ def fetch_recent_fires(days=1, bbox=None, satellite='VIIRS_SNPP_NRT'):
     """
     if bbox is None:
         bbox = DEFAULT_BBOX
+
+    if satellite is None:
+        satellite = DEFAULT_SATELLITE
 
     url = f"{BASE_URL}/{MAP_KEY}/{satellite}/{bbox}/{days}"
 

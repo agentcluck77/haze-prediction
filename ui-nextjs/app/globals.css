@@ -4,15 +4,15 @@
 
 :root {
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --background-start-rgb: 249, 250, 251;
+  --background-end-rgb: 249, 250, 251;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --background-start-rgb: 17, 24, 39;
+    --background-end-rgb: 17, 24, 39;
   }
 }
 
@@ -57,12 +57,30 @@ body {
   background: #f1f1f1;
 }
 
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-track {
+    background: #374151;
+  }
+}
+
 ::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 4px;
 }
 
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: #6b7280;
+  }
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
 }
 

@@ -69,7 +69,7 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
             <select
               value={horizon}
               onChange={(e) => setHorizon(e.target.value as Horizon)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
             >
               <option value="24h">24 Hours</option>
               <option value="48h">48 Hours</option>
@@ -83,7 +83,7 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
               placeholder="Period (days)"
               min="7"
               max="365"
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-32"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm w-32"
             />
             <button
               onClick={loadMetrics}
@@ -95,32 +95,32 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
 
           {metrics && (
             <div className="space-y-4">
-              <div className="text-sm text-gray-600">
-                Period: {metrics.period_days} days | Sample Size: {metrics.sample_size} | 
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Period: {metrics.period_days} days | Sample Size: {metrics.sample_size} |
                 Last Validated: {formatDate(metrics.last_validated)}
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-500 mb-1">MAE</div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">MAE</div>
                   <div className="text-2xl font-bold text-primary-600">
                     {metrics.regression_metrics.mae?.toFixed(2) || '-'}
                   </div>
                 </div>
-                <div className="p-4 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-500 mb-1">RMSE</div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">RMSE</div>
                   <div className="text-2xl font-bold text-primary-600">
                     {metrics.regression_metrics.rmse?.toFixed(2) || '-'}
                   </div>
                 </div>
-                <div className="p-4 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-500 mb-1">R²</div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">R²</div>
                   <div className="text-2xl font-bold text-primary-600">
                     {metrics.regression_metrics.r2?.toFixed(3) || '-'}
                   </div>
                 </div>
-                <div className="p-4 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-500 mb-1">MAPE</div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">MAPE</div>
                   <div className="text-2xl font-bold text-primary-600">
                     {metrics.regression_metrics.mape?.toFixed(2) || '-'}%
                   </div>
@@ -132,15 +132,15 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
                   <h3 className="font-semibold mb-2">Alert Metrics</h3>
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
-                      <span className="text-gray-500">Precision:</span>{' '}
+                      <span className="text-gray-500 dark:text-gray-400">Precision:</span>{' '}
                       <span className="font-semibold">{(metrics.alert_metrics.precision * 100).toFixed(1)}%</span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Recall:</span>{' '}
+                      <span className="text-gray-500 dark:text-gray-400">Recall:</span>{' '}
                       <span className="font-semibold">{(metrics.alert_metrics.recall * 100).toFixed(1)}%</span>
                     </div>
                     <div>
-                      <span className="text-gray-500">F1 Score:</span>{' '}
+                      <span className="text-gray-500 dark:text-gray-400">F1 Score:</span>{' '}
                       <span className="font-semibold">{metrics.alert_metrics.f1_score?.toFixed(3) || '-'}</span>
                     </div>
                   </div>
@@ -170,24 +170,24 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
 
               {drift.metrics_change && (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Metric</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Baseline</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Current</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Change</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Significant</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Metric</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Baseline</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Current</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Change</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Significant</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       {Object.entries(drift.metrics_change).map(([metric, change]) => (
                         <tr key={metric}>
-                          <td className="px-3 py-2 text-gray-900">{metric}</td>
-                          <td className="px-3 py-2 text-gray-700">{change.baseline?.toFixed(2) || '-'}</td>
-                          <td className="px-3 py-2 text-gray-700">{change.current?.toFixed(2) || '-'}</td>
-                          <td className="px-3 py-2 text-gray-700">{change.change_percent?.toFixed(2) || '-'}%</td>
-                          <td className="px-3 py-2 text-gray-700">{change.significant ? 'Yes' : 'No'}</td>
+                          <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{metric}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{change.baseline?.toFixed(2) || '-'}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{change.current?.toFixed(2) || '-'}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{change.change_percent?.toFixed(2) || '-'}%</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{change.significant ? 'Yes' : 'No'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -196,7 +196,7 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
               )}
 
               {drift.recommendation && (
-                <div className="p-3 bg-blue-50 rounded border border-blue-200 text-sm text-blue-800">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
                   {drift.recommendation}
                 </div>
               )}
@@ -208,23 +208,23 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
       {/* Model Evaluation */}
       <Card>
         <h2 className="text-xl font-semibold mb-4">Model Evaluation on Test Set</h2>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           Evaluate trained models on an independent test set. Default test period: Jan 2024 - Dec 2024
           (independent from 2016-2023 training data). Typical execution time: 2-5 minutes.
         </p>
-        
+
         <div className="flex gap-2 mb-4 flex-wrap">
           <input
             type="date"
             value={evalStartDate}
             onChange={(e) => setEvalStartDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
           />
           <input
             type="date"
             value={evalEndDate}
             onChange={(e) => setEvalEndDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
           />
           <input
             type="number"
@@ -233,7 +233,7 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
             placeholder="Sample hours"
             min="1"
             max="24"
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm w-32"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm w-32"
           />
           <button
             onClick={runEvaluation}
@@ -245,9 +245,9 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
 
         {evaluation && (
           <div className="space-y-6">
-            <div className="text-sm text-gray-600">
-              <strong>Test Period:</strong> {evaluation.test_period.start_date} to {evaluation.test_period.end_date} | 
-              <strong className="ml-2">Sample Hours:</strong> {evaluation.test_period.sample_hours} | 
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              <strong>Test Period:</strong> {evaluation.test_period.start_date} to {evaluation.test_period.end_date} |
+              <strong className="ml-2">Sample Hours:</strong> {evaluation.test_period.sample_hours} |
               <strong className="ml-2">Timestamp:</strong> {formatDate(evaluation.timestamp)}
             </div>
 
@@ -257,49 +257,49 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
                 if (!result) return null;
                 
                 return (
-                  <div key={h} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div key={h} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700">
                     <h3 className="font-semibold text-lg mb-3 text-primary-600">{h}</h3>
-                    
+
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">MAE:</span>
+                        <span className="text-gray-600 dark:text-gray-400">MAE:</span>
                         <span className="font-semibold">{result.mae.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">RMSE:</span>
+                        <span className="text-gray-600 dark:text-gray-400">RMSE:</span>
                         <span className="font-semibold">{result.rmse.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Baseline MAE:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Baseline MAE:</span>
                         <span className="font-semibold">{result.baseline_mae.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Improvement:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Improvement:</span>
                         <span className="font-semibold text-green-600">{result.improvement_pct.toFixed(1)}%</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Samples:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Samples:</span>
                         <span className="font-semibold">{result.samples.toLocaleString()}</span>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-gray-300">
-                      <div className="text-xs font-semibold text-gray-700 mb-2">Coefficients:</div>
+                    <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Coefficients:</div>
                       <div className="space-y-1 text-xs">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Fire Risk:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Fire Risk:</span>
                           <span className="font-mono">{result.coefficients.fire_risk.toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Wind Transport:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Wind Transport:</span>
                           <span className="font-mono">{result.coefficients.wind_transport.toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Baseline:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Baseline:</span>
                           <span className="font-mono">{result.coefficients.baseline.toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Intercept:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Intercept:</span>
                           <span className="font-mono">{result.coefficients.intercept.toFixed(4)}</span>
                         </div>
                       </div>

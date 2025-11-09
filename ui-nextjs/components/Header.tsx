@@ -84,27 +84,27 @@ export default function Header({ showToast }: HeaderProps) {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="container mx-auto px-4 py-4 max-w-7xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
             🌫️ Singapore Haze Prediction Dashboard
           </h1>
-          
+
           <div className="flex items-center gap-4 flex-wrap">
             <select
               value={baseURL}
               onChange={handleServerChange}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="http://localhost:8000">Local Development</option>
               <option value="https://staging-api.hazeprediction.sg/v1">Staging</option>
               <option value="https://api.hazeprediction.sg/v1">Production</option>
             </select>
-            
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-md">
+
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-md">
               <div className={`w-2 h-2 rounded-full ${getStatusColor(health?.status || (isChecking ? 'unknown' : 'unhealthy'))} ${isChecking ? 'animate-pulse' : ''}`} />
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {isChecking ? 'CHECKING...' : (health?.status?.toUpperCase() || 'UNKNOWN')}
               </span>
             </div>

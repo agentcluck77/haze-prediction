@@ -18,7 +18,7 @@ const tabs: { id: Tab; label: string }[] = [
 
 export default function TabNavigation({ activeTab, setActiveTab }: TabNavigationProps) {
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex space-x-1 overflow-x-auto">
           {tabs.map((tab) => (
@@ -27,8 +27,8 @@ export default function TabNavigation({ activeTab, setActiveTab }: TabNavigation
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               {tab.label}

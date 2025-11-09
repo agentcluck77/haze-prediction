@@ -74,7 +74,7 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Current PSI Card */}
         <Card className={`${category.bgColor} border-2`}>
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">Current PSI</h2>
+          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Current PSI</h2>
           <div className={`text-6xl font-bold ${category.color} mb-2`}>
             {nationalPSI || '-'}
           </div>
@@ -85,8 +85,8 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
           {psi?.readings?.psi_24h && (
             <div className="grid grid-cols-3 gap-2 mt-4">
               {['north', 'south', 'east', 'west', 'central'].map((region) => (
-                <div key={region} className="bg-white bg-opacity-50 rounded p-2 text-center">
-                  <div className="text-xs text-gray-600 uppercase">{region}</div>
+                <div key={region} className="bg-white dark:bg-gray-800 bg-opacity-50 rounded p-2 text-center">
+                  <div className="text-xs text-gray-600 dark:text-gray-400 uppercase">{region}</div>
                   <div className={`text-lg font-semibold ${category.color}`}>
                     {psi.readings.psi_24h[region as keyof typeof psi.readings.psi_24h] || '-'}
                   </div>
@@ -96,7 +96,7 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
           )}
           
           {psi?.health_advisory && (
-            <div className="mt-4 p-3 bg-white bg-opacity-70 rounded text-sm text-gray-700">
+            <div className="mt-4 p-3 bg-white dark:bg-gray-800 bg-opacity-70 rounded text-sm text-gray-700 dark:text-gray-300">
               {psi.health_advisory}
             </div>
           )}
@@ -110,12 +110,12 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
               const pred = predictions[horizon as keyof typeof predictions];
               if (!pred) return null;
               return (
-                <div key={horizon} className="text-center p-3 bg-gray-50 rounded">
-                  <div className="text-xs text-gray-500 mb-1">{horizon}</div>
+                <div key={horizon} className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{horizon}</div>
                   <div className="text-2xl font-bold text-primary-600">
                     {pred.prediction?.toFixed(1) || '-'}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     [{pred.confidence_interval?.[0]?.toFixed(1)}, {pred.confidence_interval?.[1]?.toFixed(1)}]
                   </div>
                 </div>
@@ -133,15 +133,15 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
           {fires?.summary && (
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                <div className="text-gray-500">Total FRP</div>
+                <div className="text-gray-500 dark:text-gray-400">Total FRP</div>
                 <div className="font-semibold">{fires.summary.total_frp?.toFixed(1) || 0} MW</div>
               </div>
               <div>
-                <div className="text-gray-500">High Confidence</div>
+                <div className="text-gray-500 dark:text-gray-400">High Confidence</div>
                 <div className="font-semibold">{fires.summary.high_confidence_count || 0}</div>
               </div>
               <div>
-                <div className="text-gray-500">Avg Distance</div>
+                <div className="text-gray-500 dark:text-gray-400">Avg Distance</div>
                 <div className="font-semibold">{fires.summary.avg_distance_km?.toFixed(1) || 0} km</div>
               </div>
             </div>
@@ -154,27 +154,27 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
           {weather && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <div className="text-sm text-gray-500">Temperature</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Temperature</div>
                 <div className="text-xl font-semibold">{weather.temperature_2m?.toFixed(1) || '-'}°C</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500">Humidity</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Humidity</div>
                 <div className="text-xl font-semibold">{weather.relative_humidity_2m?.toFixed(1) || '-'}%</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500">Wind Speed</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Wind Speed</div>
                 <div className="text-xl font-semibold">{weather.wind_speed_10m?.toFixed(1) || '-'} km/h</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500">Wind Direction</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Wind Direction</div>
                 <div className="text-xl font-semibold">{weather.wind_direction_10m?.toFixed(0) || '-'}°</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500">Pressure</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Pressure</div>
                 <div className="text-xl font-semibold">{weather.pressure_msl?.toFixed(1) || '-'} hPa</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500">Cloud Cover</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Cloud Cover</div>
                 <div className="text-xl font-semibold">{weather.cloud_cover || '-'}%</div>
               </div>
             </div>

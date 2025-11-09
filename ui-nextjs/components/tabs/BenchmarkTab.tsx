@@ -81,7 +81,7 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
         
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Test Data Path *
             </label>
             <input
@@ -89,12 +89,12 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
               value={testDataPath}
               onChange={(e) => setTestDataPath(e.target.value)}
               placeholder="e.g., data/test_set.csv"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Models Directory *
             </label>
             <input
@@ -102,12 +102,12 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
               value={modelsDir}
               onChange={(e) => setModelsDir(e.target.value)}
               placeholder="e.g., models/phase1"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Model Version (Optional)
             </label>
             <input
@@ -115,7 +115,7 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
               value={modelVersion}
               onChange={(e) => setModelVersion(e.target.value)}
               placeholder="e.g., phase1_v1.0"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
             />
           </div>
           <button
@@ -154,25 +154,25 @@ function BenchmarkJobCard({ jobId, job }: { jobId: string; job: BenchmarkJobStat
   };
 
   return (
-    <div className="p-4 bg-gray-50 rounded border border-gray-200">
+    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between mb-2">
         <div>
           <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(job.status)}`}>
             {job.status.toUpperCase()}
           </span>
-          <span className="ml-2 text-sm text-gray-600">Job ID: {jobId}</span>
+          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Job ID: {jobId}</span>
         </div>
       </div>
 
       {job.status === 'running' && (
         <div className="mt-3">
-          <div className="text-sm text-gray-600 mb-1">
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
             {job.progress.current_test || 'Running...'}
           </div>
-          <div className="text-xs text-gray-500 mb-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
             Progress: {job.progress.tests_completed || 0}/{job.progress.tests_total || 0} tests
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
             <div
               className="bg-primary-600 h-2 rounded-full transition-all"
               style={{ width: `${job.progress.percent_complete || 0}%` }}
@@ -203,7 +203,7 @@ function BenchmarkJobCard({ jobId, job }: { jobId: string; job: BenchmarkJobStat
       )}
 
       {job.status === 'failed' && (
-        <div className="mt-3 text-sm text-red-600">
+        <div className="mt-3 text-sm text-red-600 dark:text-red-400">
           <strong>Error:</strong> {job.error || 'Unknown error'}
         </div>
       )}

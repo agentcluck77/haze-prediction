@@ -88,7 +88,7 @@ export default function HistoricalTab({ showLoading, hideLoading, showToast }: H
           <select
             value={horizon}
             onChange={(e) => setHorizon(e.target.value as Horizon)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
           >
             <option value="24h">24 Hours</option>
             <option value="48h">48 Hours</option>
@@ -99,13 +99,13 @@ export default function HistoricalTab({ showLoading, hideLoading, showToast }: H
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
           />
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
           />
           <input
             type="number"
@@ -114,7 +114,7 @@ export default function HistoricalTab({ showLoading, hideLoading, showToast }: H
             placeholder="Limit"
             min="1"
             max="1000"
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm w-24"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm w-24"
           />
           <button
             onClick={loadHistorical}
@@ -143,26 +143,26 @@ export default function HistoricalTab({ showLoading, hideLoading, showToast }: H
 
         {data && data.predictions && data.predictions.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Predicted PSI</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actual PSI</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Error</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Within CI</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Target Time</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Predicted PSI</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actual PSI</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Error</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Within CI</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Model</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {data.predictions.map((pred, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{formatDate(pred.target_timestamp)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{pred.predicted_psi?.toFixed(1) || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{pred.actual_psi?.toFixed(1) || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{pred.absolute_error?.toFixed(1) || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{pred.within_ci ? '✓' : '✗'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{pred.model_version || '-'}</td>
+                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(pred.target_timestamp)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{pred.predicted_psi?.toFixed(1) || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{pred.actual_psi?.toFixed(1) || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{pred.absolute_error?.toFixed(1) || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{pred.within_ci ? '✓' : '✗'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{pred.model_version || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -171,7 +171,7 @@ export default function HistoricalTab({ showLoading, hideLoading, showToast }: H
         )}
 
         {data && (!data.predictions || data.predictions.length === 0) && (
-          <p className="text-gray-500 text-center py-8">No historical data available.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">No historical data available.</p>
         )}
       </Card>
     </div>

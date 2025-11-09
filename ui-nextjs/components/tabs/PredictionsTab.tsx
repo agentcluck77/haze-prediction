@@ -60,8 +60,8 @@ export default function PredictionsTab({ showLoading, hideLoading, showToast }: 
   return (
     <div className="space-y-6">
       <Card>
-        <h2 className="text-xl font-semibold mb-4">PSI Predictions</h2>
-        
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">PSI Predictions</h2>
+
         <div className="flex flex-wrap gap-2 mb-6">
           {horizons.map((horizon) => (
             <button
@@ -70,7 +70,7 @@ export default function PredictionsTab({ showLoading, hideLoading, showToast }: 
               className={`px-4 py-2 rounded-md font-medium transition-colors ${
                 selectedHorizon === horizon
                   ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               {horizon === 'all' ? 'All Horizons' : horizon}
@@ -106,36 +106,36 @@ function PredictionCard({ prediction, horizon }: { prediction: PredictionRespons
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-gray-50 rounded">
-          <div className="text-sm text-gray-500 mb-1">Prediction</div>
+        <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Prediction</div>
           <div className={`text-2xl font-bold ${category.color}`}>
             {prediction.prediction?.toFixed(1) || '-'}
           </div>
         </div>
-        <div className="p-4 bg-gray-50 rounded">
-          <div className="text-sm text-gray-500 mb-1">Confidence Interval</div>
-          <div className="text-lg font-semibold">
+        <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Confidence Interval</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             [{prediction.confidence_interval?.[0]?.toFixed(1)}, {prediction.confidence_interval?.[1]?.toFixed(1)}]
           </div>
         </div>
-        <div className="p-4 bg-gray-50 rounded">
-          <div className="text-sm text-gray-500 mb-1">Model Version</div>
-          <div className="text-lg font-semibold">{prediction.model_version || '-'}</div>
+        <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Model Version</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{prediction.model_version || '-'}</div>
         </div>
-        <div className="p-4 bg-gray-50 rounded">
-          <div className="text-sm text-gray-500 mb-1">Target Time</div>
-          <div className="text-sm font-semibold">{formatDate(prediction.target_timestamp)}</div>
+        <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Target Time</div>
+          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatDate(prediction.target_timestamp)}</div>
         </div>
       </div>
 
       {prediction.features && (
         <div>
-          <h3 className="font-semibold mb-2">Input Features</h3>
+          <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Input Features</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {Object.entries(prediction.features).map(([key, value]) => (
-              <div key={key} className="p-2 bg-gray-50 rounded text-sm">
-                <div className="text-gray-500 text-xs">{key.replace(/_/g, ' ')}</div>
-                <div className="font-semibold">{typeof value === 'number' ? value.toFixed(2) : value}</div>
+              <div key={key} className="p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm">
+                <div className="text-gray-500 dark:text-gray-400 text-xs">{key.replace(/_/g, ' ')}</div>
+                <div className="font-semibold text-gray-900 dark:text-gray-100">{typeof value === 'number' ? value.toFixed(2) : value}</div>
               </div>
             ))}
           </div>
@@ -143,12 +143,12 @@ function PredictionCard({ prediction, horizon }: { prediction: PredictionRespons
       )}
 
       {prediction.shap_explanation && (
-        <div className="p-4 bg-blue-50 rounded">
-          <h3 className="font-semibold mb-2">SHAP Explanation</h3>
-          <div className="text-sm mb-2">
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded">
+          <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">SHAP Explanation</h3>
+          <div className="text-sm mb-2 text-gray-900 dark:text-gray-100">
             <strong>Base Value:</strong> {prediction.shap_explanation.base_value?.toFixed(2)}
           </div>
-          <div className="text-sm">
+          <div className="text-sm text-gray-900 dark:text-gray-100">
             <strong>Top Contributing Factors:</strong>
             <ul className="list-disc list-inside mt-1 space-y-1">
               {prediction.shap_explanation.top_factors?.slice(0, 5).map((factor, idx) => (
@@ -162,8 +162,8 @@ function PredictionCard({ prediction, horizon }: { prediction: PredictionRespons
       )}
 
       {prediction.health_advisory && (
-        <div className="p-4 bg-yellow-50 rounded border border-yellow-200">
-          <div className="text-sm font-medium text-yellow-800">{prediction.health_advisory}</div>
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/30 rounded border border-yellow-200 dark:border-yellow-800">
+          <div className="text-sm font-medium text-yellow-800 dark:text-yellow-200">{prediction.health_advisory}</div>
         </div>
       )}
     </div>

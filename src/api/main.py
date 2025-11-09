@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 import logging
 import json
 import numpy as np
+import pandas as pd
 
 from src.api.prediction import predict_psi, predict_all_horizons, VALID_HORIZONS
 from src.data_ingestion.psi import fetch_current_psi
@@ -170,25 +171,72 @@ async def get_current_psi():
     Get latest PSI reading from NEA
 
     Returns:
-        Current PSI data for all regions
+        Current PSI data for all regions in regional format
     """
     try:
         psi_df = fetch_current_psi()
 
-        # Convert DataFrame to dict format
+        # Convert DataFrame to regional format expected by frontend
         if len(psi_df) > 0:
-            # Convert to list of records
-            readings = psi_df.to_dict('records')
             timestamp = psi_df['timestamp'].iloc[0] if 'timestamp' in psi_df.columns else datetime.now()
+
+            # Initialize regional readings structure
+            readings = {
+                "psi_24h": {},
+                "pm25_24h": {},
+                "pm10_24h": {},
+                "o3_sub_index": {},
+                "co_sub_index": {}
+            }
+
+            # Transform array format to regional object format
+            for _, row in psi_df.iterrows():
+                region = row['region']
+                readings["psi_24h"][region] = row.get('psi_24h')
+                if 'pm25_24h' in row and pd.notna(row['pm25_24h']):
+                    readings["pm25_24h"][region] = row['pm25_24h']
+                if 'pm10_24h' in row and pd.notna(row['pm10_24h']):
+                    readings["pm10_24h"][region] = row['pm10_24h']
+                if 'o3_sub_index' in row and pd.notna(row['o3_sub_index']):
+                    readings["o3_sub_index"][region] = row['o3_sub_index']
+                if 'co_sub_index' in row and pd.notna(row['co_sub_index']):
+                    readings["co_sub_index"][region] = row['co_sub_index']
+
+            # Calculate national average if not present
+            if 'national' not in readings["psi_24h"]:
+                psi_values = [v for v in readings["psi_24h"].values() if v is not None]
+                if psi_values:
+                    readings["psi_24h"]["national"] = int(sum(psi_values) / len(psi_values))
+
+            # Determine health advisory based on highest PSI
+            max_psi = max([v for v in readings["psi_24h"].values() if v is not None], default=0)
+            if max_psi <= 50:
+                health_advisory = "Good: Air quality is satisfactory"
+            elif max_psi <= 100:
+                health_advisory = "Moderate: Unusually sensitive people should consider reducing prolonged outdoor exertion"
+            elif max_psi <= 200:
+                health_advisory = "Unhealthy: People with respiratory disease should avoid prolonged outdoor exertion"
+            elif max_psi <= 300:
+                health_advisory = "Very Unhealthy: People with respiratory or heart disease, elderly and children should avoid outdoor exertion"
+            else:
+                health_advisory = "Hazardous: Everyone should avoid outdoor activities"
 
             psi_data = {
                 "timestamp": timestamp,
-                "readings": readings
+                "update_timestamp": timestamp,
+                "readings": readings,
+                "health_advisory": health_advisory
             }
         else:
             psi_data = {
                 "timestamp": datetime.now(),
-                "readings": []
+                "update_timestamp": datetime.now(),
+                "readings": {
+                    "psi_24h": {},
+                    "pm25_24h": {},
+                    "pm10_24h": {}
+                },
+                "health_advisory": "No data available"
             }
 
         # Use custom JSON encoder to handle NumPy and pandas types
@@ -252,18 +300,21 @@ async def get_current_weather():
         from src.data_ingestion.weather import fetch_current_weather
 
         # Singapore coordinates
-        weather = fetch_current_weather(1.3521, 103.8198)
+        weather_df = fetch_current_weather(1.3521, 103.8198)
 
-        if weather is not None and len(weather) > 0:
+        if weather_df is not None and len(weather_df) > 0:
+            # Convert DataFrame to dict (first row)
+            weather_dict = weather_df.iloc[0].to_dict()
+
             return {
                 "timestamp": datetime.now().isoformat(),
                 "location": "Singapore",
-                "temperature_2m": weather.get("temperature_2m"),
-                "relative_humidity_2m": weather.get("relative_humidity_2m"),
-                "wind_speed_10m": weather.get("wind_speed_10m"),
-                "wind_direction_10m": weather.get("wind_direction_10m"),
-                "pressure_msl": weather.get("pressure_msl"),
-                "cloud_cover": weather.get("cloud_cover"),
+                "temperature_2m": weather_dict.get("temperature_2m"),
+                "relative_humidity_2m": weather_dict.get("relative_humidity_2m"),
+                "wind_speed_10m": weather_dict.get("wind_speed_10m"),
+                "wind_direction_10m": weather_dict.get("wind_direction_10m"),
+                "pressure_msl": weather_dict.get("pressure_msl"),
+                "wind_gusts_10m": weather_dict.get("wind_gusts_10m"),
             }
         else:
             raise HTTPException(

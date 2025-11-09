@@ -147,6 +147,33 @@ class TestCurrentDataEndpoints:
         assert isinstance(data["count"], int)
         assert isinstance(data["fires"], list)
 
+    def test_current_weather_returns_data(self, client):
+        """Test GET /current/weather returns current weather data"""
+        response = client.get("/current/weather")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Check required fields
+        assert "timestamp" in data
+        assert "location" in data
+        assert "temperature_2m" in data
+        assert "relative_humidity_2m" in data
+        assert "wind_speed_10m" in data
+        assert "wind_direction_10m" in data
+        assert "pressure_msl" in data
+
+        # Check data types
+        assert isinstance(data["temperature_2m"], (int, float))
+        assert isinstance(data["relative_humidity_2m"], (int, float))
+        assert isinstance(data["wind_speed_10m"], (int, float))
+        assert isinstance(data["wind_direction_10m"], (int, float))
+        assert isinstance(data["pressure_msl"], (int, float))
+
+        # Check reasonable value ranges
+        assert -50 <= data["temperature_2m"] <= 60  # Celsius
+        assert 0 <= data["relative_humidity_2m"] <= 100  # Percentage
+        assert 0 <= data["wind_direction_10m"] < 360  # Degrees
+
 
 class TestHealthEndpoint:
     """Test health check endpoint"""

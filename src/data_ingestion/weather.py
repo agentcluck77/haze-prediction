@@ -163,6 +163,9 @@ def fetch_historical_weather(latitude, longitude, start_date, end_date):
 
     Returns:
         pandas.DataFrame: Historical hourly weather data
+
+    Raises:
+        requests.exceptions.HTTPError: For rate limiting (429) and other HTTP errors
     """
     params = {
         'latitude': latitude,
@@ -195,6 +198,9 @@ def fetch_historical_weather(latitude, longitude, start_date, end_date):
 
         return df
 
+    except requests.exceptions.HTTPError as e:
+        # Re-raise HTTP errors (including 429 rate limits) for retry logic
+        raise
     except requests.exceptions.RequestException as e:
         print(f"Error fetching historical weather: {e}")
         return pd.DataFrame()

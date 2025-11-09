@@ -138,6 +138,7 @@ def calculate_wind_transport_score(
     Args:
         fire_clusters: List of dicts with {lat, lon, total_frp}
         wind_forecast: DataFrame with hourly wind_speed_10m and wind_direction_10m
+                      OR dict mapping region names to DataFrames (for regional weather)
         singapore_coords: Tuple (lat, lon) for Singapore
         simulation_hours: Hours to simulate (24, 48, 72, or 168 for 7d)
 
@@ -150,10 +151,22 @@ def calculate_wind_transport_score(
     weighted_proximities = []
 
     for cluster in fire_clusters:
+        # Get weather for this cluster's location
+        if isinstance(wind_forecast, dict):
+            # Regional weather: find nearest region and use its weather
+            cluster_weather = _get_weather_for_cluster(cluster, wind_forecast)
+        else:
+            # Single weather forecast: use for all clusters
+            cluster_weather = wind_forecast
+
+        if len(cluster_weather) < simulation_hours:
+            # Not enough weather data for this cluster
+            continue
+
         # Simulate trajectory
         trajectory = simulate_trajectory(
             (cluster['lat'], cluster['lon']),
-            wind_forecast,
+            cluster_weather,
             hours=simulation_hours
         )
 
@@ -175,3 +188,71 @@ def calculate_wind_transport_score(
     transport_score = min(sum(weighted_proximities), 100.0)
 
     return transport_score
+
+
+def _get_weather_for_cluster(cluster, weather_dict):
+    """
+    Get weather forecast for a fire cluster from weather dict.
+
+    Args:
+        cluster: Dict with {lat, lon, total_frp}
+        weather_dict: Dict mapping grid_id or region names to weather DataFrames
+
+    Returns:
+        pandas.DataFrame: Weather forecast for cluster's location
+    """
+    cluster_pos = (cluster['lat'], cluster['lon'])
+
+    # Check if dict uses grid_id format (lat_lon) or region names
+    first_key = list(weather_dict.keys())[0]
+
+    if '_' in first_key and all(c.isdigit() or c in '._-' for c in first_key):
+        # Grid-based weather: parse grid points and find nearest
+        grid_points = []
+        for grid_id in weather_dict.keys():
+            try:
+                lat_str, lon_str = grid_id.split('_')
+                lat = float(lat_str)
+                lon = float(lon_str)
+                grid_points.append((lat, lon, grid_id))
+            except:
+                continue
+
+        if len(grid_points) == 0:
+            return list(weather_dict.values())[0]
+
+        # Find nearest grid point
+        min_distance = float('inf')
+        nearest_grid_id = grid_points[0][2]
+
+        for lat, lon, grid_id in grid_points:
+            distance = haversine_distance(cluster_pos, (lat, lon))
+            if distance < min_distance:
+                min_distance = distance
+                nearest_grid_id = grid_id
+
+        return weather_dict[nearest_grid_id]
+
+    else:
+        # Region-based weather: use original logic
+        try:
+            from src.training.regional_weather_loader import FIRE_REGIONS
+
+            min_distance = float('inf')
+            nearest_region = None
+
+            for region in FIRE_REGIONS:
+                region_pos = (region['lat'], region['lon'])
+                distance = haversine_distance(cluster_pos, region_pos)
+
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_region = region['name']
+
+            if nearest_region and nearest_region in weather_dict:
+                return weather_dict[nearest_region]
+        except:
+            pass
+
+        # Fallback: return first available weather
+        return list(weather_dict.values())[0]

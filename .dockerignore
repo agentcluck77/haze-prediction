@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+hacx/
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# Data (will be mounted as volume)
+# Exclude large LFS CSV files but include eval cache
+data/*.csv
+!data/cache/eval_*.csv
+data/*.json
+
+# Logs
+logs/
+*.log
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Temporary files
+*.tmp
+*.bak
+
+# Benchmark
+benchmark/
+benchmark_report.json
+
+# Tests
+tests/
+pytest.ini
+
+# Development scripts
+*.sh

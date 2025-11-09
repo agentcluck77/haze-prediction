@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { formatDate } from '@/utils/psi';
-import type { BenchmarkJobRequest, BenchmarkJobStatus, BenchmarkJobResponse } from '@/types/api';
+import type { BenchmarkJobRequest, BenchmarkJobStatus } from '@/types/api';
 
 interface BenchmarkTabProps {
   showLoading: (text?: string) => void;
@@ -18,44 +18,44 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
   const [modelVersion, setModelVersion] = useState<string>('');
   const [jobs, setJobs] = useState<Map<string, BenchmarkJobStatus>>(new Map());
 
-  const showLoadingRef = useRef(showLoading);
-  const hideLoadingRef = useRef(hideLoading);
-  const showToastRef = useRef(showToast);
+  // const showLoadingRef = useRef(showLoading);
+  // const hideLoadingRef = useRef(hideLoading);
+  // const showToastRef = useRef(showToast);
 
-  // Update refs when callbacks change
-  useEffect(() => {
-    showLoadingRef.current = showLoading;
-    hideLoadingRef.current = hideLoading;
-    showToastRef.current = showToast;
-  }, [showLoading, hideLoading, showToast]);
+  // // Update refs when callbacks change
+  // useEffect(() => {
+  //   showLoadingRef.current = showLoading;
+  //   hideLoadingRef.current = hideLoading;
+  //   showToastRef.current = showToast;
+  // }, [showLoading, hideLoading, showToast]);
 
-  const pollBenchmarkStatus = (jobId: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await api.getBenchmarkStatus(jobId);
-        setJobs((prevJobs) => {
-          const newJobs = new Map(prevJobs);
-          newJobs.set(jobId, status);
-          return newJobs;
-        });
+  // const pollBenchmarkStatus = (jobId: string) => {
+  //   const interval = setInterval(async () => {
+  //     try {
+  //       const status = await api.getBenchmarkStatus(jobId);
+  //       setJobs((prevJobs) => {
+  //         const newJobs = new Map(prevJobs);
+  //         newJobs.set(jobId, status);
+  //         return newJobs;
+  //       });
 
-        if (status.status === 'completed' || status.status === 'failed') {
-          clearInterval(interval);
-        }
-      } catch (error) {
-        clearInterval(interval);
-        showToastRef.current(`Failed to poll benchmark status: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
-      }
-    }, 5000); // Poll every 5 seconds
-  };
+  //       if (status.status === 'completed' || status.status === 'failed') {
+  //         clearInterval(interval);
+  //       }
+  //     } catch (error) {
+  //       clearInterval(interval);
+  //       showToastRef.current(`Failed to poll benchmark status: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+  //     }
+  //   }, 5000); // Poll every 5 seconds
+  // };
 
   const startBenchmark = async () => {
     if (!testDataPath || !modelsDir) {
-      showToastRef.current('Please fill in all required fields', 'error');
+      showToast('Please fill in all required fields', 'error');
       return;
     }
 
-    showLoadingRef.current('Starting benchmark...');
+    showLoading('Starting benchmark...');
     try {
       const request: BenchmarkJobRequest = {
         test_data_path: testDataPath,
@@ -68,10 +68,44 @@ export default function BenchmarkTab({ showLoading, hideLoading, showToast }: Be
 
       pollBenchmarkStatus(result.job_id);
     } catch (error) {
-      showToastRef.current('Failed to start benchmark', 'error');
+      showToast('Failed to start benchmark', 'error');
     } finally {
-      hideLoadingRef.current();
+      hideLoading();
     }
+  };
+
+  const pollBenchmarkStatus = async (jobId: string) => {
+
+    const interval = setInterval(async () => {
+
+      try {
+
+        const status = await api.getBenchmarkStatus(jobId);
+
+        const newJobs = new Map(jobs);
+
+        newJobs.set(jobId, status);
+
+        setJobs(newJobs);
+
+
+
+        if (status.status === 'completed' || status.status === 'failed') {
+
+          clearInterval(interval);
+
+        }
+
+      } catch (error) {
+
+        clearInterval(interval);
+
+        showToast(`Failed to poll benchmark status: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+
+      }
+
+    }, 5000); // Poll every 5 seconds
+
   };
 
   return (
@@ -164,7 +198,7 @@ function BenchmarkJobCard({ jobId, job }: { jobId: string; job: BenchmarkJobStat
         </div>
       </div>
 
-      {job.status === 'running' && (
+      {job.status === 'running' && 'progress' in job && (
         <div className="mt-3">
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
             {job.progress.current_test || 'Running...'}
@@ -181,7 +215,7 @@ function BenchmarkJobCard({ jobId, job }: { jobId: string; job: BenchmarkJobStat
         </div>
       )}
 
-      {job.status === 'completed' && (
+      {job.status === 'completed' && 'results' in job && (
         <div className="mt-3 space-y-2 text-sm">
           <div>
             <strong>Duration:</strong> {job.duration_seconds || 0} seconds

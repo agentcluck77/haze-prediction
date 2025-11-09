@@ -177,4 +177,3 @@ export default function HistoricalTab({ showLoading, hideLoading, showToast }: H
     </div>
   );
 }
-

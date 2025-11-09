@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { formatDate } from '@/utils/psi';
-import type { MetricsResponse, DriftResponse, EvaluationResponse, Horizon } from '@/types/api';
+import type { MetricsResponse, DriftResponse, Horizon } from '@/types/api';
 
 interface MetricsTabProps {
   showLoading: (text?: string) => void;
@@ -20,10 +20,6 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
   const [useDateRange, setUseDateRange] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
   const [drift, setDrift] = useState<DriftResponse | null>(null);
-  const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
-  const [evalStartDate, setEvalStartDate] = useState<string>('2024-01-01');
-  const [evalEndDate, setEvalEndDate] = useState<string>('2024-12-31');
-  const [sampleHours, setSampleHours] = useState<number>(1);
 
   const loadMetrics = async () => {
     showLoading('Loading metrics...');
@@ -58,19 +54,6 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
       setDrift(driftData);
     } catch (error) {
       showToast('Failed to check drift', 'error');
-    } finally {
-      hideLoading();
-    }
-  };
-
-  const runEvaluation = async () => {
-    showLoading('Running model evaluation... This may take 2-5 minutes.');
-    try {
-      const evalData = await api.evaluateModels(evalStartDate, evalEndDate, sampleHours);
-      setEvaluation(evalData);
-      showToast('Evaluation completed successfully', 'success');
-    } catch (error) {
-      showToast('Failed to run evaluation', 'error');
     } finally {
       hideLoading();
     }
@@ -258,114 +241,6 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
           )}
         </Card>
       </div>
-
-      {/* Model Evaluation */}
-      <Card>
-        <h2 className="text-xl font-semibold mb-4">Model Evaluation on Test Set</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Evaluate trained models on an independent test set. Default test period: Jan 2024 - Dec 2024
-          (independent from 2016-2023 training data). Typical execution time: 2-5 minutes.
-        </p>
-
-        <div className="flex gap-2 mb-4 flex-wrap">
-          <input
-            type="date"
-            value={evalStartDate}
-            onChange={(e) => setEvalStartDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
-          />
-          <input
-            type="date"
-            value={evalEndDate}
-            onChange={(e) => setEvalEndDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
-          />
-          <input
-            type="number"
-            value={sampleHours}
-            onChange={(e) => setSampleHours(parseInt(e.target.value) || 1)}
-            placeholder="Sample hours"
-            min="1"
-            max="24"
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm w-32"
-          />
-          <button
-            onClick={runEvaluation}
-            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm"
-          >
-            Run Evaluation
-          </button>
-        </div>
-
-        {evaluation && (
-          <div className="space-y-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              <strong>Test Period:</strong> {evaluation.test_period.start_date} to {evaluation.test_period.end_date} |
-              <strong className="ml-2">Sample Hours:</strong> {evaluation.test_period.sample_hours} |
-              <strong className="ml-2">Timestamp:</strong> {formatDate(evaluation.timestamp)}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {(['24h', '48h', '72h', '7d'] as Horizon[]).map((h) => {
-                const result = evaluation.results[h];
-                if (!result) return null;
-                
-                return (
-                  <div key={h} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <h3 className="font-semibold text-lg mb-3 text-primary-600">{h}</h3>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">MAE:</span>
-                        <span className="font-semibold">{result.mae.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">RMSE:</span>
-                        <span className="font-semibold">{result.rmse.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Baseline MAE:</span>
-                        <span className="font-semibold">{result.baseline_mae.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Improvement:</span>
-                        <span className="font-semibold text-green-600">{result.improvement_pct.toFixed(1)}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Samples:</span>
-                        <span className="font-semibold">{result.samples.toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Coefficients:</div>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Fire Risk:</span>
-                          <span className="font-mono">{result.coefficients.fire_risk.toFixed(4)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Wind Transport:</span>
-                          <span className="font-mono">{result.coefficients.wind_transport.toFixed(4)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Baseline:</span>
-                          <span className="font-mono">{result.coefficients.baseline.toFixed(4)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Intercept:</span>
-                          <span className="font-mono">{result.coefficients.intercept.toFixed(4)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
-

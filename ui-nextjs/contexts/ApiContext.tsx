@@ -11,7 +11,7 @@ interface ApiContextType {
 const ApiContext = createContext<ApiContextType | undefined>(undefined);
 
 export function ApiProvider({ children }: { children: ReactNode }) {
-  const [baseURL, setBaseURLState] = useState('http://localhost:3000');
+  const [baseURL, setBaseURLState] = useState('http://localhost:8000');
 
   const setBaseURL = (url: string) => {
     api.setBaseURL(url);
@@ -32,4 +32,3 @@ export function useApi() {
   }
   return context;
 }
-

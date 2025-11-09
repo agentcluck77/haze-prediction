@@ -26,5 +26,3 @@ export default function MapTab({ showLoading, hideLoading, showToast }: MapTabPr
     </div>
   );
 }
-
-

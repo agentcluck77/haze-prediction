@@ -17,4 +17,3 @@ export default function LoadingOverlay({ loading, text = 'Loading...' }: Loading
     </div>
   );
 }
-

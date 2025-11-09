@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { formatDate } from '@/utils/psi';
@@ -19,52 +19,31 @@ export default function CurrentDataTab({ showLoading, hideLoading, showToast }: 
   const [minConfidence, setMinConfidence] = useState<ConfidenceLevel | ''>('');
   const [minFrp, setMinFrp] = useState<string>('');
 
-  const showLoadingRef = useRef(showLoading);
-  const hideLoadingRef = useRef(hideLoading);
-  const showToastRef = useRef(showToast);
-
-  // Update refs when callbacks change
   useEffect(() => {
-    showLoadingRef.current = showLoading;
-    hideLoadingRef.current = hideLoading;
-    showToastRef.current = showToast;
-  }, [showLoading, hideLoading, showToast]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      if (!mounted) return;
-      showLoadingRef.current('Loading current data...');
-      try {
-        const [psiData, firesData, weatherData] = await Promise.all([
-          api.getCurrentPSI().catch(() => null),
-          api.getCurrentFires().catch(() => null),
-          api.getCurrentWeather().catch(() => null),
-        ]);
-
-        if (!mounted) return;
-        if (psiData) setPsi(psiData);
-        if (firesData) setFires(firesData);
-        if (weatherData) setWeather(weatherData);
-      } catch (error) {
-        if (!mounted) return;
-        showToastRef.current('Failed to load current data', 'error');
-      } finally {
-        if (mounted) hideLoadingRef.current();
-      }
-    };
-
     loadData();
-
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const loadData = async () => {
+    showLoading('Loading current data...');
+    try {
+      const [psiData, firesData, weatherData] = await Promise.all([
+        api.getCurrentPSI().catch(() => null),
+        api.getCurrentFires().catch(() => null),
+        api.getCurrentWeather().catch(() => null),
+      ]);
+
+      if (psiData) setPsi(psiData);
+      if (firesData) setFires(firesData);
+      if (weatherData) setWeather(weatherData);
+    } catch (error) {
+      showToast('Failed to load current data', 'error');
+    } finally {
+      hideLoading();
+    }
+  };
+
   const loadFires = async () => {
-    showLoadingRef.current('Loading fires...');
+    showLoading('Loading fires...');
     try {
       const firesData = await api.getCurrentFires(
         minConfidence || undefined,
@@ -72,9 +51,9 @@ export default function CurrentDataTab({ showLoading, hideLoading, showToast }: 
       );
       setFires(firesData);
     } catch (error) {
-      showToastRef.current('Failed to load fires', 'error');
+      showToast('Failed to load fires', 'error');
     } finally {
-      hideLoadingRef.current();
+      hideLoading();
     }
   };
 

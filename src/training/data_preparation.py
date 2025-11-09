@@ -6,6 +6,7 @@ Aligns datasets, engineers features, and creates target variables.
 import pandas as pd
 import numpy as np
 from datetime import timedelta
+from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from src.features.fire_risk import calculate_fire_risk_score
 from src.features.wind_transport import calculate_wind_transport_score, cluster_fires
@@ -225,7 +226,7 @@ def create_target_variables(psi_df, base_timestamp, region='national'):
     return targets
 
 
-def prepare_training_dataset(start_date, end_date, sample_hours=24):
+def prepare_training_dataset(start_date, end_date, sample_hours=24, use_cache=True, force_rebuild=False):
     """
     Prepare complete training dataset.
 
@@ -233,14 +234,29 @@ def prepare_training_dataset(start_date, end_date, sample_hours=24):
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
         sample_hours: Sample every N hours (default: 24 to reduce data size)
+        use_cache: Use cached features if available (default: True)
+        force_rebuild: Force rebuild even if cache exists (default: False)
 
     Returns:
         pandas.DataFrame: Training dataset with features and targets
     """
-    from src.training.historical_data import fetch_historical_psi_range
-    from src.training.grid_weather_loader import load_grid_weather
+    # Check for cached features
+    cache_file = Path(__file__).parent.parent.parent / "data" / "cache" / f"training_{start_date}_{end_date}_h{sample_hours}.csv"
 
-    print(f"Fetching historical data from {start_date} to {end_date}...")
+    if use_cache and cache_file.exists() and not force_rebuild:
+        print(f"Loading cached features from {cache_file.name}...")
+        df = pd.read_csv(cache_file)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        print(f"✓ Loaded {len(df)} cached samples")
+        return df
+
+    print(f"Preparing training dataset from scratch...")
+    print(f"(This will be cached for future use)")
+
+    from src.training.historical_data import fetch_historical_psi_range
+    from src.training.era5_csv_loader import load_era5_csv
+
+    print(f"\nFetching historical data from {start_date} to {end_date}...")
 
     # Fetch PSI data
     psi_df = fetch_historical_psi_range(start_date, end_date)
@@ -254,18 +270,18 @@ def prepare_training_dataset(start_date, end_date, sample_hours=24):
 
     print(f"Fetched {len(psi_df)} PSI records")
 
-    # Load grid weather data (pre-downloaded)
-    grid_weather, grid_points = load_grid_weather()
+    # Load ERA5 weather data from CSV
+    era5_weather, grid_points = load_era5_csv()
 
-    if grid_weather is None or len(grid_points) == 0:
-        print("ERROR: No grid weather data found!")
-        print("Please run: python3 scripts/download_grid_weather.py")
+    if era5_weather is None or len(grid_points) == 0:
+        print("ERROR: No ERA5 weather data found!")
+        print("Please run: python3 scripts/convert_era5_to_csv.py")
         return pd.DataFrame()
 
     # Filter to requested date range
-    weather_df = grid_weather[
-        (grid_weather['timestamp'] >= pd.Timestamp(start_date)) &
-        (grid_weather['timestamp'] <= pd.Timestamp(end_date))
+    weather_df = era5_weather[
+        (era5_weather['timestamp'] >= pd.Timestamp(start_date)) &
+        (era5_weather['timestamp'] <= pd.Timestamp(end_date))
     ].copy()
 
     print(f"Loaded {len(weather_df):,} weather records for {len(grid_points)} grid points")
@@ -338,12 +354,30 @@ def prepare_training_dataset(start_date, end_date, sample_hours=24):
     elapsed = time.time() - start_time
     print(f"Processed {len(sampled_timestamps)} timestamps in {elapsed/60:.1f} minutes")
 
+    if len(records) == 0:
+        print("ERROR: No valid records produced!")
+        return pd.DataFrame()
+
     df = pd.DataFrame(records)
 
     # Drop rows with missing targets (any horizon)
     target_columns = ['actual_psi_24h', 'actual_psi_48h', 'actual_psi_72h', 'actual_psi_7d']
     df = df.dropna(subset=target_columns)
 
+    if len(df) == 0:
+        print("\nERROR: All records dropped due to missing target values!")
+        print("This likely means PSI data doesn't extend far enough into the future.")
+        print(f"Date range requested: {start_date} to {end_date}")
+        print("Check that PSI data extends at least 7 days beyond end_date.")
+        return pd.DataFrame()
+
     print(f"Created training dataset with {len(df)} records")
+
+    # Save to cache for future use
+    if use_cache:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\nSaving features to cache: {cache_file.name}...")
+        df.to_csv(cache_file, index=False)
+        print(f"✓ Cached {len(df)} samples ({cache_file.stat().st_size / (1024**2):.1f} MB)")
 
     return df

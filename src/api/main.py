@@ -437,8 +437,9 @@ async def get_model_metrics(
 
     try:
         # Calculate date range
+        # Default to 2024 data since that's what's in the eval cache
         if not end_date:
-            end_date = datetime.now().strftime('%Y-%m-%d')
+            end_date = '2024-12-24'  # End of cached data
 
         if not start_date:
             # Calculate start_date from period_days
@@ -460,7 +461,9 @@ async def get_model_metrics(
             # If evaluation fails (e.g., missing data files in Cloud Run),
             # return placeholder metrics from model validation
             from src.api.prediction import MODEL_METRICS
-            logger.warning(f"Evaluation failed, returning placeholder metrics: {str(eval_error)}")
+            import traceback
+            logger.error(f"Evaluation failed: {str(eval_error)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
             return {
                 "horizon": horizon,
@@ -494,7 +497,15 @@ async def get_model_metrics(
                 "note": "Using validation metrics - historical data not available in production"
             }
 
-        if not results or horizon not in results:
+        if not results:
+            logger.error(f"evaluate_on_test_set returned None for {start_date} to {end_date}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not evaluate metrics for {horizon}"
+            )
+
+        if horizon not in results:
+            logger.error(f"Horizon {horizon} not in results: {list(results.keys())}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Could not evaluate metrics for {horizon}"

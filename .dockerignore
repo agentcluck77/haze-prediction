@@ -33,7 +33,9 @@ htmlcov/
 .env.local
 
 # Data (will be mounted as volume)
+# Exclude large LFS CSV files but include eval cache
 data/*.csv
+!data/cache/eval_*.csv
 data/*.json
 
 # Logs

@@ -100,7 +100,8 @@ def main():
             test_annotations[filename] = data['label']
     
     # Create label encoder matching training
-    classes = ['haze', 'normal', 'smoke']
+    # Use fixed class mapping: smoke=0, haze=1, normal=2 (matches inference script)
+    classes = ['smoke', 'haze', 'normal']  # Fixed order to match inference
     label_encoder = LabelEncoder()
     label_encoder.fit(classes)
     

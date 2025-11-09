@@ -16,7 +16,7 @@ data:
   
 # Training Hyperparameters
 training:
-  num_epochs: 100
+  num_epochs: 150
   learning_rate: 2e-4  # ConvNeXt typically uses higher learning rates
   weight_decay: 0.05
   warmup_steps: 500

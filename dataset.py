@@ -22,9 +22,15 @@ class HacXDataset(Dataset):
                 self.samples.append(data)
         
         # Extract unique classes and create label encoder
-        self.classes = sorted(list(set([sample['label'] for sample in self.samples])))
+        # Use fixed class mapping: smoke=0, haze=1, normal=2 (matches inference script)
+        self.classes = ['smoke', 'haze', 'normal']  # Fixed order to match inference
         self.label_encoder = LabelEncoder()
         self.label_encoder.fit(self.classes)
+        
+        # Verify all labels in dataset are in our fixed classes
+        unique_labels = set([sample['label'] for sample in self.samples])
+        if not unique_labels.issubset(set(self.classes)):
+            raise ValueError(f"Found unexpected labels in dataset: {unique_labels - set(self.classes)}. Expected only: {self.classes}")
         
     def __len__(self):
         return len(self.samples)

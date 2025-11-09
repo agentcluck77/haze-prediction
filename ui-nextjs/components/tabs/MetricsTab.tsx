@@ -15,13 +15,30 @@ interface MetricsTabProps {
 export default function MetricsTab({ showLoading, hideLoading, showToast }: MetricsTabProps) {
   const [horizon, setHorizon] = useState<Horizon>('24h');
   const [periodDays, setPeriodDays] = useState<number>(30);
+  const [startDate, setStartDate] = useState<string>('2024-01-01');
+  const [endDate, setEndDate] = useState<string>('2024-12-31');
+  const [useDateRange, setUseDateRange] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
   const [drift, setDrift] = useState<DriftResponse | null>(null);
 
   const loadMetrics = async () => {
     showLoading('Loading metrics...');
     try {
-      const metricsData = await api.getMetrics(horizon, periodDays);
+      // Build params based on whether using date range or period
+      let metricsData;
+      if (useDateRange) {
+        // Call with date range
+        const params = new URLSearchParams({
+          period_days: periodDays.toString(),
+          start_date: startDate,
+          end_date: endDate
+        });
+        const response = await fetch(`${api.getBaseURL()}/metrics/${horizon}?${params}`);
+        if (!response.ok) throw new Error('Failed to fetch metrics');
+        metricsData = await response.json();
+      } else {
+        metricsData = await api.getMetrics(horizon, periodDays);
+      }
       setMetrics(metricsData);
     } catch (error) {
       showToast('Failed to load metrics', 'error');
@@ -48,26 +65,58 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
         {/* Model Performance Metrics */}
         <Card>
           <h2 className="text-xl font-semibold mb-4">Model Performance Metrics</h2>
-          <div className="flex gap-2 mb-4 flex-wrap">
-            <select
-              value={horizon}
-              onChange={(e) => setHorizon(e.target.value as Horizon)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="24h">24 Hours</option>
-              <option value="48h">48 Hours</option>
-              <option value="72h">72 Hours</option>
-              <option value="7d">7 Days</option>
-            </select>
-            <input
-              type="number"
-              value={periodDays}
-              onChange={(e) => setPeriodDays(parseInt(e.target.value) || 30)}
-              placeholder="Period (days)"
-              min="7"
-              max="365"
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-32"
-            />
+          <div className="space-y-3 mb-4">
+            <div className="flex gap-2 flex-wrap items-center">
+              <select
+                value={horizon}
+                onChange={(e) => setHorizon(e.target.value as Horizon)}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="24h">24 Hours</option>
+                <option value="48h">48 Hours</option>
+                <option value="72h">72 Hours</option>
+                <option value="7d">7 Days</option>
+              </select>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={useDateRange}
+                  onChange={(e) => setUseDateRange(e.target.checked)}
+                  className="rounded"
+                />
+                Use date range
+              </label>
+            </div>
+
+            {useDateRange ? (
+              <div className="flex gap-2 flex-wrap items-center">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
+                <span className="text-sm text-gray-500">to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+            ) : (
+              <input
+                type="number"
+                value={periodDays}
+                onChange={(e) => setPeriodDays(parseInt(e.target.value) || 30)}
+                placeholder="Period (days)"
+                min="7"
+                max="365"
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm w-32"
+              />
+            )}
+
             <button
               onClick={loadMetrics}
               className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm"
@@ -79,7 +128,12 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
           {metrics && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">
-                Period: {metrics.period_days} days | Sample Size: {metrics.sample_size} | 
+                {useDateRange ? (
+                  <>Date Range: {startDate} to {endDate} | </>
+                ) : (
+                  <>Period: {metrics.period_days} days | </>
+                )}
+                Sample Size: {metrics.sample_size} |
                 Last Validated: {formatDate(metrics.last_validated)}
               </div>
               

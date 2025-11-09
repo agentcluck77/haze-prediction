@@ -81,23 +81,30 @@ def fetch_recent_fires(days=1, bbox=None, satellite=None):
             else:
                 return 'l'
 
-        df['confidence'] = df['confidence'].apply(confidence_to_letter)
-        # Add acq_datetime column by combining acq_date and acq_time
-        df['acq_datetime'] = df.apply(
-            lambda row: parse_acquisition_datetime(row['acq_date'], row['acq_time']),
-            axis=1
+        # Vectorize confidence conversion for speed
+        if 'confidence' in df.columns:
+            df['confidence'] = df['confidence'].apply(confidence_to_letter)
+
+        # Vectorize acq_datetime creation for speed
+        df['acq_datetime'] = pd.to_datetime(df['acq_date']) + pd.to_timedelta(
+            df['acq_time'].astype(str).str.zfill(4).str[:2].astype(int), unit='h'
+        ) + pd.to_timedelta(
+            df['acq_time'].astype(str).str.zfill(4).str[2:].astype(int), unit='m'
         )
 
-        # Add distance_to_singapore_km column
-        from src.features.geospatial import haversine_distance
-        singapore_coords = (1.3521, 103.8198)
-        df['distance_to_singapore_km'] = df.apply(
-            lambda row: haversine_distance(
-                singapore_coords,
-                (row['latitude'], row['longitude'])
-            ),
-            axis=1
-        )
+        # Vectorize distance calculation for speed using numpy
+        import numpy as np
+        singapore_lat, singapore_lon = 1.3521, 103.8198
+
+        # Haversine distance (vectorized)
+        lat1_rad = np.radians(singapore_lat)
+        lat2_rad = np.radians(df['latitude'].values)
+        dlat = np.radians(df['latitude'].values - singapore_lat)
+        dlon = np.radians(df['longitude'].values - singapore_lon)
+
+        a = np.sin(dlat/2)**2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon/2)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        df['distance_to_singapore_km'] = 6371 * c  # Earth radius in km
 
         return df
 

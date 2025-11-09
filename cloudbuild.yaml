@@ -2,6 +2,14 @@
 # Triggers on push to main branch
 
 steps:
+  # Step 0: Fetch Git LFS files
+  - name: 'gcr.io/cloud-builders/git'
+    id: 'fetch-lfs-files'
+    args:
+      - 'lfs'
+      - 'pull'
+    timeout: 300s
+
   # Step 1: Build Docker image for API
   - name: 'gcr.io/cloud-builders/docker'
     id: 'build-api-image'

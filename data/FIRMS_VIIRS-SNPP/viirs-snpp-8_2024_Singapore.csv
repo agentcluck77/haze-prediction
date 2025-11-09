@@ -1,2 +1,3 @@
-latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight,type
-1.3128,103.7048,305.26,0.46,0.63,2024-11-11,1749,N,VIIRS,n,2,287.07,1.03,N,0
+version https://git-lfs.github.com/spec/v1
+oid sha256:10ff60d8ffa7312b699bffe767b58915e66a0e923c6f88f34e9d19cb871316d0
+size 205

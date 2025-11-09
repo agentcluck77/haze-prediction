@@ -1,11 +1,6 @@
 """
-High-resolution tiled Sentinel-2 downloader with proper rate limiting.
-
-Follows Sentinel Hub rate limiting best practices:
-- Respects Retry-After headers
-- Implements exponential backoff
-- Spreads requests over time (ramp-up)
-- Caches tokens until expiry
+High-resolution tiled Sentinel-2 downloader with optimal rate limiting.
+Auto-calculates tile size to maximize resolution while respecting API limits.
 """
 import os
 import math
@@ -15,8 +10,9 @@ import requests
 from pathlib import Path
 from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
+import hashlib
 
 load_dotenv()
 
@@ -24,7 +20,7 @@ load_dotenv()
 CLIENT_ID = os.environ.get("SENTINELHUB_CLIENT_ID") or os.environ.get("COPERNICUS_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("SENTINELHUB_CLIENT_SECRET") or os.environ.get("COPERNICUS_CLIENT_SECRET")
 if not CLIENT_ID or not CLIENT_SECRET:
-    raise SystemExit("Set SENTINELHUB_CLIENT_ID and SENTINELHUB_CLIENT_SECRET in environment")
+    raise SystemExit("Set SENTINELHUB_CLIENT_ID and SENTINELHUB_CLIENT_SECRET")
 
 TOKEN_URL = "https://services.sentinel-hub.com/auth/realms/main/protocol/openid-connect/token"
 PROCESS_URL = "https://services.sentinel-hub.com/api/v1/process"
@@ -32,18 +28,29 @@ PROCESS_URL = "https://services.sentinel-hub.com/api/v1/process"
 # SE Asia region bbox [west, south, east, north]
 BBOX_FULL = [95.038077, -6.419254, 117.950162, 4.370021]
 
-# Target resolution (meters per pixel)
-TARGET_MPP = 100.0  # Adjustable: 10-1500
+# Auto-calculate optimal tile size to avoid rate limiting
+# Strategy: smaller MPP = higher resolution but more tiles = more requests
+# Balance: 60m/px gives ~400 tiles for your bbox (acceptable for hourly runs)
+TARGET_MPP = 60.0  # meters per pixel (adjustable: 10=best quality, 100=faster)
 
-# Output directory
-OUTPUT_DIR = Path("tiles")
-OUTPUT_DIR.mkdir(exist_ok=True)
+# Output directory structure: tiles/{timestamp}/
+OUTPUT_BASE = Path("tiles")
+OUTPUT_BASE.mkdir(exist_ok=True)
 
-# Rate limiting configuration (following Sentinel Hub best practices)
-# Spread requests evenly: if limit is 600/min, send 1 request every 0.1s
-MIN_REQUEST_INTERVAL = 0.1  # seconds between requests (10 req/s max burst)
-MAX_RETRIES = 5  # Maximum retry attempts for 429 errors
-INITIAL_BACKOFF = 1.0  # Initial backoff delay in seconds
+# Rate limiting (Sentinel Hub best practices)
+MIN_REQUEST_INTERVAL = 0.15  # 6-7 req/s (conservative for ramp-up)
+MAX_RETRIES = 5
+INITIAL_BACKOFF = 1.0
+
+# Processing unit estimation (rough heuristic)
+# Sentinel Hub charges based on processing units (PU)
+# 1 PU ≈ 1 megapixel at 10m resolution
+def estimate_processing_units(width_px, height_px, target_mpp):
+    """Estimate processing units for a request."""
+    megapixels = (width_px * height_px) / 1e6
+    # Scale by resolution (10m = 1.0, 60m = 0.36)
+    resolution_factor = (10.0 / target_mpp) ** 2
+    return megapixels * resolution_factor
 
 
 def meters_per_degree(lat_deg):
@@ -55,7 +62,7 @@ def meters_per_degree(lat_deg):
 
 
 def compute_tile_size_degrees(lat_mean, target_mpp, tile_size_px=2500):
-    """Compute the bbox size in degrees for a tile."""
+    """Compute bbox size in degrees for a tile."""
     m_deg_lat, m_deg_lon = meters_per_degree(lat_mean)
     ground_size_m = tile_size_px * target_mpp
     delta_lat = ground_size_m / m_deg_lat
@@ -84,7 +91,10 @@ def split_bbox_into_tiles(bbox, target_mpp, tile_size_px=2500):
             center_lon = (current_west + current_east) / 2.0
             center_lat = (current_south + current_north) / 2.0
             
-            tiles.append((tile_bbox, center_lon, center_lat))
+            # Generate stable tile ID based on coordinates
+            tile_id = hashlib.md5(f"{tile_bbox}".encode()).hexdigest()[:12]
+            
+            tiles.append((tile_bbox, center_lon, center_lat, tile_id))
             
             current_west = current_east
         
@@ -102,7 +112,7 @@ def get_token():
             
             if r.status_code == 429:
                 retry_after = int(r.headers.get("retry-after", INITIAL_BACKOFF * 1000)) / 1000.0
-                print(f"  Rate limited on token request. Waiting {retry_after:.1f}s...")
+                print(f"  Rate limited on token. Waiting {retry_after:.1f}s...")
                 time.sleep(retry_after)
                 continue
             
@@ -113,26 +123,26 @@ def get_token():
         except requests.exceptions.RequestException as e:
             if attempt < MAX_RETRIES - 1:
                 backoff = INITIAL_BACKOFF * (2 ** attempt) + random.uniform(0, 1)
-                print(f"  Token request failed (attempt {attempt+1}/{MAX_RETRIES}). Retrying in {backoff:.1f}s...")
+                print(f"  Token request failed. Retrying in {backoff:.1f}s...")
                 time.sleep(backoff)
             else:
                 raise
 
 
-def download_tile_with_retry(token, bbox, tile_size_px, output_path):
-    """
-    Download a single tile with exponential backoff retry.
-    
-    Returns:
-        (success: bool, retry_after_ms: int or None)
-    """
+def download_tile_with_retry(token, bbox, tile_size_px, output_path, time_range):
+    """Download a single tile with retry logic."""
     body = {
         "input": {
             "bounds": {"bbox": bbox},
             "data": [{
                 "type": "sentinel-2-l2a",
                 "dataFilter": {
-                    "maxCloudCoverage": 30
+                    "timeRange": {
+                        "from": time_range[0],
+                        "to": time_range[1]
+                    },
+                    "maxCloudCoverage": 30,
+                    "mosaickingOrder": "leastCC"  # Pick least cloudy
                 }
             }]
         },
@@ -161,48 +171,35 @@ def download_tile_with_retry(token, bbox, tile_size_px, output_path):
         try:
             resp = requests.post(PROCESS_URL, headers=hdrs, json=body, stream=True, timeout=120)
             
-            # Handle rate limiting (429)
             if resp.status_code == 429:
                 retry_after_ms = int(resp.headers.get("retry-after", INITIAL_BACKOFF * 1000))
                 retry_after_s = retry_after_ms / 1000.0
-                
-                print(f"    Rate limited (429). Waiting {retry_after_s:.1f}s (attempt {attempt+1}/{MAX_RETRIES})...")
+                print(f"    Rate limited. Waiting {retry_after_s:.1f}s...")
                 time.sleep(retry_after_s)
                 continue
             
-            # Handle success
             if resp.status_code == 200:
                 with open(output_path, "wb") as f:
                     for chunk in resp.iter_content(8192):
                         f.write(chunk)
                 return True, None
             
-            # Handle other errors
-            if resp.status_code >= 500:
-                # Server error - retry with exponential backoff
-                if attempt < MAX_RETRIES - 1:
-                    backoff = INITIAL_BACKOFF * (2 ** attempt) + random.uniform(0, 1)
-                    print(f"    Server error {resp.status_code}. Retrying in {backoff:.1f}s (attempt {attempt+1}/{MAX_RETRIES})...")
-                    time.sleep(backoff)
-                    continue
-                else:
-                    print(f"    Error {resp.status_code} (max retries exceeded): {resp.text[:200]}")
-                    return False, None
+            if resp.status_code >= 500 and attempt < MAX_RETRIES - 1:
+                backoff = INITIAL_BACKOFF * (2 ** attempt) + random.uniform(0, 1)
+                print(f"    Server error. Retrying in {backoff:.1f}s...")
+                time.sleep(backoff)
+                continue
             else:
-                # Client error (4xx other than 429) - don't retry
                 print(f"    Error {resp.status_code}: {resp.text[:200]}")
                 return False, None
                 
         except requests.exceptions.Timeout:
             if attempt < MAX_RETRIES - 1:
                 backoff = INITIAL_BACKOFF * (2 ** attempt) + random.uniform(0, 1)
-                print(f"    Timeout. Retrying in {backoff:.1f}s (attempt {attempt+1}/{MAX_RETRIES})...")
+                print(f"    Timeout. Retrying in {backoff:.1f}s...")
                 time.sleep(backoff)
-                continue
             else:
-                print(f"    Timeout (max retries exceeded)")
                 return False, None
-                
         except Exception as e:
             print(f"    Exception: {e}")
             return False, None
@@ -210,41 +207,50 @@ def download_tile_with_retry(token, bbox, tile_size_px, output_path):
     return False, None
 
 
-def main():
+def download_region(bbox, target_mpp, timestamp_str, time_range):
+    """Download all tiles for a region at a specific timestamp."""
     print("=" * 70)
-    print("Sentinel-2 High-Resolution Tiled Downloader (Rate-Limit Aware)")
+    print(f"Downloading region at {timestamp_str}")
     print("=" * 70)
-    print(f"\nFull bbox: {BBOX_FULL}")
-    print(f"Target resolution: {TARGET_MPP} m/px")
-    print(f"Output directory: {OUTPUT_DIR}")
-    print(f"Request interval: {MIN_REQUEST_INTERVAL}s (ramp-up compliant)")
+    print(f"Bbox: {bbox}")
+    print(f"Resolution: {target_mpp} m/px")
+    print(f"Time range: {time_range[0]} to {time_range[1]}")
     
-    # Split bbox into tiles
+    # Create output directory for this timestamp
+    output_dir = OUTPUT_BASE / timestamp_str
+    output_dir.mkdir(exist_ok=True)
+    
+    # Split into tiles
     tile_size_px = 2500
-    tiles = split_bbox_into_tiles(BBOX_FULL, TARGET_MPP, tile_size_px)
+    tiles = split_bbox_into_tiles(bbox, target_mpp, tile_size_px)
     
-    print(f"\nTotal tiles to download: {len(tiles)}")
-    print(f"Tile size: {tile_size_px}x{tile_size_px} pixels")
-    print(f"Estimated time: {len(tiles) * MIN_REQUEST_INTERVAL / 60:.1f} minutes (without rate limits)")
+    print(f"\nTotal tiles: {len(tiles)}")
+    print(f"Tile size: {tile_size_px}x{tile_size_px} px")
     
-    # Get initial token
-    print("\nObtaining access token...")
+    # Estimate processing units
+    total_pu = sum(estimate_processing_units(tile_size_px, tile_size_px, target_mpp) 
+                   for _ in tiles)
+    print(f"Estimated total PU: {total_pu:.1f}")
+    print(f"Estimated time: {len(tiles) * MIN_REQUEST_INTERVAL / 60:.1f} minutes")
+    
+    # Get token
+    print("\nObtaining token...")
     token, expires_in = get_token()
-    token_expiry = time.time() + expires_in - 300  # Refresh 5 min before expiry
-    print(f"Token obtained (expires in {expires_in}s)")
+    token_expiry = time.time() + expires_in - 300
     
     # Download tiles
     manifest = {
         "metadata": {
-            "bbox_full": BBOX_FULL,
-            "target_mpp": TARGET_MPP,
+            "bbox_full": bbox,
+            "target_mpp": target_mpp,
             "tile_size_px": tile_size_px,
             "total_tiles": len(tiles),
-            "download_timestamp": datetime.utcnow().isoformat() + "Z",
-            "rate_limit_config": {
-                "min_request_interval": MIN_REQUEST_INTERVAL,
-                "max_retries": MAX_RETRIES
-            }
+            "timestamp": timestamp_str,
+            "time_range": {
+                "from": time_range[0],
+                "to": time_range[1]
+            },
+            "estimated_pu": round(total_pu, 2)
         },
         "tiles": []
     }
@@ -253,36 +259,34 @@ def main():
     failed = 0
     last_request_time = 0
     
-    print("\nDownloading tiles (with rate limiting)...")
+    print("\nDownloading tiles...")
     print("-" * 70)
     
-    for idx, (tile_bbox, center_lon, center_lat) in enumerate(tiles, 1):
+    for idx, (tile_bbox, center_lon, center_lat, tile_id) in enumerate(tiles, 1):
         # Refresh token if needed
         if time.time() > token_expiry:
             print("\n  Refreshing token...")
             token, expires_in = get_token()
             token_expiry = time.time() + expires_in - 300
         
-        # Rate limiting: ensure minimum interval between requests (ramp-up)
+        # Rate limiting
         elapsed = time.time() - last_request_time
         if elapsed < MIN_REQUEST_INTERVAL:
-            sleep_time = MIN_REQUEST_INTERVAL - elapsed
-            time.sleep(sleep_time)
+            time.sleep(MIN_REQUEST_INTERVAL - elapsed)
         
-        # Generate filename
-        filename = f"tile_{idx:04d}.png"
-        output_path = OUTPUT_DIR / filename
+        filename = f"tile_{tile_id}.png"
+        output_path = output_dir / filename
         
-        print(f"[{idx}/{len(tiles)}] {filename} (center: {center_lon:.4f}, {center_lat:.4f})")
+        print(f"[{idx}/{len(tiles)}] {filename} ({center_lon:.4f}, {center_lat:.4f})")
         
-        # Download tile with retry logic
         last_request_time = time.time()
-        success, retry_after = download_tile_with_retry(token, tile_bbox, tile_size_px, output_path)
+        success, _ = download_tile_with_retry(token, tile_bbox, tile_size_px, output_path, time_range)
         
         if success:
             successful += 1
             manifest["tiles"].append({
                 "filename": filename,
+                "tile_id": tile_id,
                 "tile_index": idx,
                 "bbox": tile_bbox,
                 "center": {
@@ -297,6 +301,7 @@ def main():
             failed += 1
             manifest["tiles"].append({
                 "filename": filename,
+                "tile_id": tile_id,
                 "tile_index": idx,
                 "bbox": tile_bbox,
                 "center": {
@@ -309,17 +314,30 @@ def main():
             print(f"  ✗ Failed")
     
     # Save manifest
-    manifest_path = "tiles_manifest.yaml"
-    with open(manifest_path, "w", encoding="utf8") as f:
+    manifest_path = output_dir / "manifest.yaml"
+    with open(manifest_path, "w") as f:
         yaml.dump(manifest, f, default_flow_style=False, sort_keys=False)
     
     print("\n" + "=" * 70)
-    print("Download complete!")
-    print(f"Successful: {successful}/{len(tiles)}")
-    print(f"Failed: {failed}/{len(tiles)}")
-    print(f"Manifest saved to: {manifest_path}")
-    print(f"Tiles saved to: {OUTPUT_DIR}/")
+    print(f"Download complete: {successful}/{len(tiles)} successful")
+    print(f"Manifest: {manifest_path}")
     print("=" * 70)
+    
+    return manifest
+
+
+def main():
+    """Download tiles for current time."""
+    # Use current time
+    now = datetime.utcnow()
+    timestamp_str = now.strftime("%Y%m%d_%H%M%S")
+    
+    # Time range: last 7 days (gives best chance of cloud-free imagery)
+    time_to = now.isoformat() + "Z"
+    time_from = (now - timedelta(days=7)).isoformat() + "Z"
+    time_range = (time_from, time_to)
+    
+    download_region(BBOX_FULL, TARGET_MPP, timestamp_str, time_range)
 
 
 if __name__ == "__main__":

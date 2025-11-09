@@ -28,7 +28,7 @@ class HazeAPI {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 30000,
+      timeout: 5000,
     });
 
     // Add response interceptor for error handling

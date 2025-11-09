@@ -82,7 +82,6 @@ def fetch_recent_fires(days=1, bbox=None, satellite=None):
                 return 'l'
 
         df['confidence'] = df['confidence'].apply(confidence_to_letter)
-
         # Add acq_datetime column by combining acq_date and acq_time
         df['acq_datetime'] = df.apply(
             lambda row: parse_acquisition_datetime(row['acq_date'], row['acq_time']),

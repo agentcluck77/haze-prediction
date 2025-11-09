@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.training.data_preparation import prepare_training_dataset
 from src.training.model_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
 import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error, accuracy_score, precision_recall_fscore_support
@@ -72,28 +71,41 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
         print(f"Model Evaluation - Test Set ({start_date} to {end_date})")
         print("=" * 70)
 
-    # Step 1: Prepare test data
+    # Step 1: Load test data from cache
     if verbose:
-        print(f"\n[1/2] Preparing test dataset...")
+        print(f"\n[1/2] Loading test dataset from cache...")
 
     try:
-        test_df = prepare_training_dataset(
-            start_date=start_date,
-            end_date=end_date,
-            sample_hours=sample_hours
-        )
+        # Use pre-generated cache file (covers 2016-02-01 to 2024-12-31, sampled every 6 hours)
+        cache_file = Path('data/cache/eval_2016-02-01_2024-12-31_h6.csv')
+
+        if not cache_file.exists():
+            raise FileNotFoundError(f"Evaluation cache file not found: {cache_file}")
+
+        # Load cache and filter to requested date range
+        test_df = pd.read_csv(cache_file, parse_dates=['timestamp'])
+
+        # Filter to date range
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+        test_df = test_df[(test_df['timestamp'] >= start_dt) & (test_df['timestamp'] <= end_dt)]
+
+        # Resample if needed (cache is sampled at 6 hours)
+        if sample_hours != 6:
+            if verbose:
+                print(f"Note: Cache is sampled at 6 hours, requested {sample_hours} hours. Using cache sampling.")
 
         if verbose:
-            print(f"✓ Test dataset prepared: {len(test_df)} samples")
+            print(f"✓ Test dataset loaded: {len(test_df)} samples from cache")
 
         if len(test_df) == 0:
             if verbose:
-                print("ERROR: No test samples created!")
+                print("ERROR: No test samples in date range!")
             return None
 
     except Exception as e:
         if verbose:
-            print(f"✗ Failed to prepare test data: {e}")
+            print(f"✗ Failed to load test data: {e}")
             import traceback
             traceback.print_exc()
         return None

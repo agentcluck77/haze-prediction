@@ -1,6 +1,6 @@
 'use client';
 
-type Tab = 'overview' | 'predictions' | 'current' | 'historical' | 'metrics' | 'benchmark';
+type Tab = 'overview' | 'predictions' | 'current' | 'historical' | 'metrics' | 'benchmark' | 'map';
 
 interface TabNavigationProps {
   activeTab: Tab;
@@ -14,6 +14,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'historical', label: 'Historical' },
   { id: 'metrics', label: 'Metrics' },
   { id: 'benchmark', label: 'Benchmark' },
+  { id: 'map', label: 'Map' },
 ];
 
 export default function TabNavigation({ activeTab, setActiveTab }: TabNavigationProps) {

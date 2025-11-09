@@ -9,10 +9,11 @@ import CurrentDataTab from '@/components/tabs/CurrentDataTab';
 import HistoricalTab from '@/components/tabs/HistoricalTab';
 import MetricsTab from '@/components/tabs/MetricsTab';
 import BenchmarkTab from '@/components/tabs/BenchmarkTab';
+import MapTab from '@/components/tabs/MapTab';
 import LoadingOverlay from '@/components/LoadingOverlay';
 import Toast from '@/components/Toast';
 
-type Tab = 'overview' | 'predictions' | 'current' | 'historical' | 'metrics' | 'benchmark';
+type Tab = 'overview' | 'predictions' | 'current' | 'historical' | 'metrics' | 'benchmark'| 'map';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -46,6 +47,7 @@ export default function Home() {
         {activeTab === 'historical' && <HistoricalTab showLoading={showLoading} hideLoading={hideLoading} showToast={showToast} />}
         {activeTab === 'metrics' && <MetricsTab showLoading={showLoading} hideLoading={hideLoading} showToast={showToast} />}
         {activeTab === 'benchmark' && <BenchmarkTab showLoading={showLoading} hideLoading={hideLoading} showToast={showToast} />}
+        {activeTab === 'map' && <MapTab showLoading={showLoading} hideLoading={hideLoading} showToast={showToast} />}
       </main>
 
       <LoadingOverlay loading={loading} text={loadingText} />

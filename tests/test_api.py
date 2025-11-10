@@ -11,6 +11,9 @@ import json
 @pytest.fixture
 def client():
     """Create FastAPI test client"""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
     from src.api.main import app
     return TestClient(app)
 

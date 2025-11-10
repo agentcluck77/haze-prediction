@@ -17,11 +17,11 @@ def generate_eval_cache():
     """Generate comprehensive evaluation cache file"""
 
     # Define date range
-    start_date = '2016-02-01'
+    start_date = '2014-04-01'
     end_date = '2024-12-31'
     sample_hours = 6  # Sample every 6 hours for reasonable file size
 
-    output_file = Path('data/cache/eval_2016-02-01_2024-12-31_h6.csv')
+    output_file = Path('data/cache/eval_2014-04-01_2024-12-31_h6.csv')
 
     print("=" * 70)
     print("Generating Evaluation Cache File")

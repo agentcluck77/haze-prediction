@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Train all PSI prediction models
-Generates LinearRegression models for all prediction horizons
+Train LightGBM models for PSI prediction
+Uses class weighting to handle imbalanced data
 """
 
 import sys
@@ -10,19 +10,18 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.training.model_trainer import train_and_save_all_models
+from src.training.lightgbm_trainer import train_and_save_all_lightgbm_models
 
 
 def main():
-    """Train all models and save to models/ directory"""
+    """Train all LightGBM models and save to models/ directory"""
     print("=" * 60)
-    print("Singapore Haze Prediction - Model Training")
+    print("Singapore Haze Prediction - LightGBM Training")
     print("=" * 60)
 
     # Step 1: Load training data from eval cache
     print("\n[1/2] Loading training dataset from eval cache...")
 
-    from pathlib import Path
     import pandas as pd
 
     # Use the comprehensive eval cache (2014-2024) and filter to training period
@@ -49,13 +48,21 @@ def main():
         return 1
 
     print(f"✓ Training dataset prepared: {len(training_df)} samples")
-    print(f"  Columns: {list(training_df.columns)}")
+    print(f"  Using 25 features (3 original + 22 new)")
+
+    # Check for missing features
+    from src.training.lightgbm_trainer import FEATURE_COLUMNS
+    missing_cols = [col for col in FEATURE_COLUMNS if col not in training_df.columns]
+    if missing_cols:
+        print(f"\n✗ ERROR: Missing feature columns: {missing_cols}")
+        print("Available columns:", list(training_df.columns))
+        return 1
 
     # Step 2: Train and save models
-    print("\n[2/2] Training models for all horizons...")
+    print("\n[2/2] Training LightGBM models with class weighting...")
 
     try:
-        results = train_and_save_all_models(training_df, models_dir='models')
+        results = train_and_save_all_lightgbm_models(training_df, models_dir='models')
 
         print("\n" + "=" * 60)
         print("Training Complete!")
@@ -71,8 +78,8 @@ def main():
             print(f"  Samples: {metrics['train_samples']} train, {metrics['test_samples']} test")
 
         print("\n" + "=" * 60)
-        print("Models saved to: models/")
-        print("Ready to start API server!")
+        print("LightGBM models saved to: models/")
+        print("Next: Run evaluation to compare with LinearRegression")
         print("=" * 60)
 
         return 0

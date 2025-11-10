@@ -38,7 +38,7 @@ def main():
     # Step 1: Prepare features (this will be FAST after first run - loads from cache)
     print("\n[1/2] Loading training data...")
     training_df = prepare_training_dataset(
-        start_date='2016-02-01',
+        start_date='2014-04-01',
         end_date='2023-12-31',
         sample_hours=6,
         use_cache=True  # Use cached features!

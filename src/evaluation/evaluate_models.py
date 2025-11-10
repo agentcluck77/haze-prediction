@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.training.model_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
+from src.training.lightgbm_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
 import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, accuracy_score, precision_recall_fscore_support
 import pandas as pd
@@ -121,7 +121,7 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
         if verbose:
             print(f"\nEvaluating {horizon} model...")
 
-        model_file = models_dir / f'linear_regression_{horizon}.pkl'
+        model_file = models_dir / f'lightgbm_{horizon}.pkl'
 
         if not model_file.exists():
             if verbose:
@@ -204,11 +204,13 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
                 'baseline_mae': float(baseline_mae),
                 'improvement_pct': improvement_pct,
                 'samples': int(len(y_test)),
-                'coefficients': {
-                    'fire_risk': float(model.coef_[0]),
-                    'wind_transport': float(model.coef_[1]),
-                    'baseline': float(model.coef_[2]),
-                    'intercept': float(model.intercept_)
+                'feature_importance': {
+                    feat: float(imp)
+                    for feat, imp in sorted(
+                        zip(FEATURE_COLUMNS, model.feature_importances_),
+                        key=lambda x: x[1],
+                        reverse=True
+                    )[:10]  # Top 10 features
                 },
                 'classification': {
                     'accuracy': float(accuracy),

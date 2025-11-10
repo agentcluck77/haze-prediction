@@ -141,9 +141,9 @@ hacx-extra/
 
 ## Model Details
 
-The prediction system uses a multiple linear regression model to forecast the Pollutant Standards Index (PSI). This model establishes a linear relationship between a set of independent features and the dependent variable (the future PSI value).
+The prediction system uses LightGBM (Light Gradient Boosting Machine), an ensemble of gradient-boosted decision trees optimized for imbalanced regression. Unlike linear models, LightGBM captures non-linear interactions and hierarchical patterns in atmospheric data.
 
-**Algorithm:** Linear Regression
+**Algorithm:** LightGBM with Class-Weighted Regression
 
 **Features (25):**
 - Fire risk score (1): FRP-weighted composite
@@ -159,21 +159,121 @@ The prediction system uses a multiple linear regression model to forecast the Po
 **Training:** April 2014 - Dec 2023 (6-hour sampling, includes 2015 haze crisis)
 **Test set:** Jan 2024 - Dec 2024 (independent)
 
-### How it Works
+### Gradient Boosting Framework
 
-At its core, the model calculates the predicted PSI as a weighted sum of its input features. The relationship is expressed by the following equation:
+LightGBM builds an ensemble of $M$ sequential decision trees, where each tree corrects the errors of the previous ensemble. The final prediction is:
 
 $$
-\text{Predicted PSI} = \beta_0 + \sum_{i=1}^{25} \beta_i \times X_i + \epsilon
+\hat{y} = F_M(\mathbf{x}) = \sum_{m=1}^{M} \eta \cdot h_m(\mathbf{x})
 $$
 
 Where:
--   $X_i$ represents the $i$-th feature (fire scores, PSI lags, temporal features, spatial fire counts)
--   $\beta_0$ is the model's intercept
--   $\beta_i$ are the coefficients (weights) learned during training
--   $\epsilon$ represents the model's error term
+- $\mathbf{x} \in \mathbb{R}^{25}$ is the feature vector
+- $h_m(\mathbf{x})$ is the $m$-th decision tree (weak learner)
+- $\eta = 0.05$ is the learning rate (shrinkage)
+- $M = 200$ is the number of boosting iterations
 
-During training, the model learns the optimal values for the coefficients ($\beta_i$) that minimize the difference between its predictions and the actual historical PSI values. A separate model with a unique set of coefficients is trained for each prediction horizon.
+**Gradient Descent in Function Space:**
+
+At iteration $m$, the algorithm fits a tree $h_m$ to the negative gradient of the loss function:
+
+$$
+h_m = \arg\min_{h} \sum_{i=1}^{N} w_i \cdot L\left(y_i, F_{m-1}(\mathbf{x}_i) + h(\mathbf{x}_i)\right)
+$$
+
+Where:
+- $L(y, \hat{y}) = \frac{1}{2}(y - \hat{y})^2$ (L2 loss for regression)
+- $w_i$ is the sample weight (class-weighted)
+- $F_{m-1}$ is the ensemble after $m-1$ iterations
+
+**Tree Structure:**
+
+Each tree $h_m$ partitions the feature space into $J = 31$ leaf nodes:
+
+$$
+h_m(\mathbf{x}) = \sum_{j=1}^{J} \gamma_{mj} \cdot \mathbb{1}(\mathbf{x} \in R_{mj})
+$$
+
+Where:
+- $R_{mj}$ is the $j$-th leaf region (decision path)
+- $\gamma_{mj}$ is the leaf weight (predicted residual)
+- $\mathbb{1}(\cdot)$ is the indicator function
+
+### Class Weighting for Imbalanced Regression
+
+Unhealthy PSI events (101-200) are rare (~5% of samples). To prevent the model from ignoring these critical events, we assign higher weights to minority classes.
+
+**Binning Strategy:**
+
+PSI values are discretized into $K=6$ bands:
+
+$$
+c_i = \text{bin}(y_i) \in \{0, 1, 2, 3, 4, 5\}
+$$
+
+Thresholds: $[0, 50, 100, 200, 300, \infty)$
+
+**Weight Calculation:**
+
+For each class $c$, the weight is inversely proportional to its frequency:
+
+$$
+w_c = \frac{N}{K \cdot N_c}
+$$
+
+Where:
+- $N$ is the total training samples
+- $N_c = \sum_{i=1}^{N} \mathbb{1}(c_i = c)$ is the count of class $c$
+- $K$ is the number of classes
+
+Sample weight for observation $i$:
+
+$$
+w_i = w_{c_i}
+$$
+
+**Effect:** Unhealthy PSI samples receive ~4-8× higher weights, forcing the model to prioritize correct predictions for rare but critical events.
+
+### Hyperparameters
+
+**Tree Structure:**
+- Max depth: $d = 6$ (prevents overfitting)
+- Leaf nodes: $J = 31$ (default for $d=6$)
+- Min samples per leaf: $n_{\min} = 20$ (regularization)
+
+**Ensemble:**
+- Trees: $M = 200$
+- Learning rate: $\eta = 0.05$ (conservative, stable convergence)
+
+**Regularization:**
+- L1 penalty: $\alpha = 0.1$ (feature selection)
+- L2 penalty: $\lambda = 0.1$ (weight smoothing)
+- Subsample ratio: $0.8$ (row sampling per tree)
+- Feature fraction: $0.8$ (column sampling per tree)
+
+**Loss Function:**
+
+$$
+\mathcal{L} = \sum_{i=1}^{N} w_i \cdot \frac{1}{2}(y_i - \hat{y}_i)^2 + \alpha \sum_{m=1}^{M} \sum_{j=1}^{J} |\gamma_{mj}| + \lambda \sum_{m=1}^{M} \sum_{j=1}^{J} \gamma_{mj}^2
+$$
+
+### Training Methodology
+
+**Data Split:** 80% train, 20% validation (stratified by PSI bands)
+
+**Optimization:** Each tree minimizes weighted L2 loss on pseudo-residuals:
+
+$$
+r_i^{(m)} = -\frac{\partial L(y_i, F_{m-1}(\mathbf{x}_i))}{\partial F_{m-1}(\mathbf{x}_i)} = y_i - F_{m-1}(\mathbf{x}_i)
+$$
+
+**Leaf Weight Update:** For leaf $j$ in tree $m$:
+
+$$
+\gamma_{mj} = \frac{\sum_{i \in R_{mj}} w_i \cdot r_i^{(m)}}{\sum_{i \in R_{mj}} w_i + \lambda}
+$$
+
+**Convergence:** Model updates stop after $M=200$ iterations (early stopping not used).
 
 #### Feature Calculation
 

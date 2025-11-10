@@ -14,7 +14,9 @@ import json
 import numpy as np
 import pandas as pd
 
-from src.api.prediction import predict_psi, predict_all_horizons, VALID_HORIZONS
+from src.api.prediction_lgbm import predict_psi_lgbm, predict_all_horizons_lgbm, VALID_HORIZONS
+# Keep legacy LinearRegression API available for rollback
+from src.api.prediction import predict_psi as predict_psi_legacy, predict_all_horizons as predict_all_horizons_legacy
 from src.data_ingestion.psi import fetch_current_psi
 from src.data_ingestion.firms import fetch_recent_fires
 from src.evaluation.evaluate_models import evaluate_on_test_set
@@ -112,13 +114,13 @@ async def root():
 @app.get("/predict/all")
 async def get_all_predictions():
     """
-    Get predictions for all time horizons
+    Get predictions for all time horizons using LightGBM models
 
     Returns:
         dict mapping horizon -> prediction data
     """
     try:
-        predictions = predict_all_horizons()
+        predictions = predict_all_horizons_lgbm()
         return predictions
     except Exception as e:
         logger.error(f"Failed to generate predictions: {str(e)}")
@@ -131,7 +133,7 @@ async def get_all_predictions():
 @app.get("/predict/{horizon}", response_model=PredictionResponse)
 async def get_prediction(horizon: str):
     """
-    Get PSI prediction for specified horizon
+    Get PSI prediction for specified horizon using LightGBM models (25 features)
 
     Args:
         horizon: One of '24h', '48h', '72h', '7d'
@@ -149,7 +151,7 @@ async def get_prediction(horizon: str):
         )
 
     try:
-        prediction = predict_psi(horizon)
+        prediction = predict_psi_lgbm(horizon)
         return prediction
     except FileNotFoundError as e:
         raise HTTPException(

@@ -348,6 +348,57 @@ See `DOCKER.md` for details.
 
 ---
 
+## CI/CD Pipeline
+
+The system uses Google Cloud Build for automated deployment on every push to `main`.
+
+**Trigger:** `agentcluck77/haze-prediction` (main branch)
+
+**Build Process:**
+
+1. **Docker Image Build** (3 services):
+   - `haze-prediction-api` - FastAPI backend
+   - `haze-prediction-scheduler` - APScheduler for periodic tasks
+   - `haze-prediction-ui` - Next.js frontend
+
+2. **Push to Artifact Registry:**
+   ```
+   asia-southeast1-docker.pkg.dev/hacx-477608/haze-prediction/
+   ```
+
+3. **Deploy to Cloud Run** (asia-southeast1):
+   - API: https://haze-prediction-api-ridyuv6yva-as.a.run.app
+   - UI: https://haze-prediction-ui-ridyuv6yva-as.a.run.app
+   - Scheduler: Internal (no public endpoint)
+
+**Configuration:**
+- Build config: `cloudbuild.yaml`
+- Machine type: E2_HIGHCPU_8
+- Timeout: 1200s (20 minutes)
+- Models bundled in Docker images (no separate artifact upload)
+
+**Monitoring:**
+```bash
+# View trigger status
+gcloud builds triggers list
+
+# Check recent builds
+gcloud builds list --limit=5
+
+# View build logs
+gcloud builds log <BUILD_ID>
+
+# Check deployed services
+gcloud run services list --region=asia-southeast1
+```
+
+**Automatic Rollout:**
+- Push to `main` → Trigger build → Deploy API/UI/Scheduler
+- Zero-downtime deployment (Cloud Run gradual traffic migration)
+- Database migrations run automatically via Cloud SQL Proxy
+
+---
+
 ## Troubleshooting
 
 **Model not found:**

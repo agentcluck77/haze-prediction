@@ -257,18 +257,16 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
 
             # Print model coefficients
             print("\n" + "=" * 70)
-            print("Model Coefficients")
+            print("Top Feature Importance (LightGBM)")
             print("=" * 70)
 
             for horizon in VALID_HORIZONS:
                 if horizon in results:
                     r = results[horizon]
-                    coef = r['coefficients']
-                    print(f"\n{horizon} Model:")
-                    print(f"  Fire risk coefficient:      {coef['fire_risk']:>8.4f}")
-                    print(f"  Wind transport coefficient: {coef['wind_transport']:>8.4f}")
-                    print(f"  Baseline coefficient:       {coef['baseline']:>8.4f}")
-                    print(f"  Intercept:                  {coef['intercept']:>8.4f}")
+                    feat_imp = r['feature_importance']
+                    print(f"\n{horizon} Model - Top 10 Features:")
+                    for i, (feat, imp) in enumerate(feat_imp.items(), 1):
+                        print(f"  {i}. {feat:<25} {imp:>8.0f}")
 
             # Check if fire features are being used
             print("\n" + "=" * 70)
@@ -278,16 +276,17 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             any_fire_used = False
             for horizon in VALID_HORIZONS:
                 if horizon in results:
-                    fire_coef = results[horizon]['coefficients']['fire_risk']
-                    wind_coef = results[horizon]['coefficients']['wind_transport']
+                    feat_imp = results[horizon]['feature_importance']
+                    fire_imp = feat_imp.get('fire_risk_score', 0)
+                    wind_imp = feat_imp.get('wind_transport_score', 0)
 
-                    if abs(fire_coef) > 0.01 or abs(wind_coef) > 0.01:
+                    if fire_imp > 10 or wind_imp > 10:
                         any_fire_used = True
                         print(f"\n{horizon}: Fire features ARE being used")
-                        print(f"  Fire risk impact: {fire_coef:.4f} per unit")
-                        print(f"  Wind transport impact: {wind_coef:.4f} per unit")
+                        print(f"  Fire risk importance: {fire_imp:.0f}")
+                        print(f"  Wind transport importance: {wind_imp:.0f}")
                     else:
-                        print(f"\n{horizon}: Fire features NOT being used (coefficients near 0)")
+                        print(f"\n{horizon}: Fire features NOT being used (low importance)")
 
             if not any_fire_used:
                 print("\nWARNING: No models are using fire features!")

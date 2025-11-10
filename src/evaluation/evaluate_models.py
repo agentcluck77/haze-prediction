@@ -76,8 +76,8 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
         print(f"\n[1/2] Loading test dataset from cache...")
 
     try:
-        # Use pre-generated cache file (covers 2016-02-01 to 2024-12-31, sampled every 6 hours)
-        cache_file = Path('data/cache/eval_2016-02-01_2024-12-31_h6.csv')
+        # Use pre-generated cache file (covers 2014-04-01 to 2024-12-31, sampled every 6 hours)
+        cache_file = Path('data/cache/eval_2014-04-01_2024-12-31_h6.csv')
 
         if not cache_file.exists():
             raise FileNotFoundError(f"Evaluation cache file not found: {cache_file}")
@@ -290,6 +290,21 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             if not any_fire_used:
                 print("\nWARNING: No models are using fire features!")
                 print("This suggests the model is relying only on persistence (baseline).")
+
+            # Print per-band metrics
+            print("\n" + "=" * 70)
+            print("Per-Band Classification Metrics")
+            print("=" * 70)
+
+            for horizon in VALID_HORIZONS:
+                if horizon in results:
+                    print(f"\n{horizon} Model:")
+                    print(f"{'Band':<20} {'Precision':<12} {'Recall':<12} {'F1 Score':<12} {'Support':<12}")
+                    print("-" * 68)
+                    per_band = results[horizon]['classification']['per_band']
+                    for band_name, metrics in per_band.items():
+                        print(f"{band_name:<20} {metrics['precision']:<12.3f} {metrics['recall']:<12.3f} "
+                              f"{metrics['f1_score']:<12.3f} {metrics['support']:<12}")
 
             print("\n" + "=" * 70)
 

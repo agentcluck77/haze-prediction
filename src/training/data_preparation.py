@@ -46,6 +46,147 @@ def align_datasets(psi_df, fire_df, weather_df):
     return aligned
 
 
+def engineer_psi_lag_features(timestamp, psi_df, region='national'):
+    """
+    Engineer PSI lag features.
+
+    Args:
+        timestamp: Target timestamp
+        psi_df: DataFrame with PSI readings
+        region: Region to get PSI for (default: national)
+
+    Returns:
+        dict: PSI lag features (1h, 6h, 12h, 24h ago) and trend features
+    """
+    # Filter for the specified region
+    psi_region = psi_df[psi_df['region'] == region].copy()
+    psi_region = psi_region.sort_values('timestamp')
+    psi_region['timestamp'] = pd.to_datetime(psi_region['timestamp'])
+
+    features = {}
+
+    # Define lag hours
+    lag_hours = [1, 6, 12, 24]
+
+    for lag_h in lag_hours:
+        lag_time = timestamp - timedelta(hours=lag_h)
+        lag_row = psi_region[psi_region['timestamp'] == lag_time]
+
+        if len(lag_row) > 0:
+            features[f'psi_lag_{lag_h}h'] = lag_row.iloc[0]['psi_24h']
+        else:
+            # If exact match not found, use forward fill (most recent past value)
+            past_data = psi_region[psi_region['timestamp'] < lag_time]
+            if len(past_data) > 0:
+                features[f'psi_lag_{lag_h}h'] = past_data.iloc[-1]['psi_24h']
+            else:
+                features[f'psi_lag_{lag_h}h'] = 0.0
+
+    # Calculate trend features (rate of change)
+    if 'psi_lag_1h' in features and 'psi_lag_6h' in features:
+        features['psi_trend_1h_6h'] = features['psi_lag_1h'] - features['psi_lag_6h']
+    else:
+        features['psi_trend_1h_6h'] = 0.0
+
+    if 'psi_lag_6h' in features and 'psi_lag_24h' in features:
+        features['psi_trend_6h_24h'] = features['psi_lag_6h'] - features['psi_lag_24h']
+    else:
+        features['psi_trend_6h_24h'] = 0.0
+
+    return features
+
+
+def engineer_temporal_features(timestamp):
+    """
+    Engineer temporal features from timestamp.
+
+    Args:
+        timestamp: Target timestamp
+
+    Returns:
+        dict: Temporal features (hour, day_of_week, month, season)
+    """
+    ts = pd.Timestamp(timestamp)
+
+    features = {
+        'hour': ts.hour,
+        'day_of_week': ts.dayofweek,  # 0=Monday, 6=Sunday
+        'month': ts.month,
+        'day_of_year': ts.dayofyear
+    }
+
+    # Add season (for Singapore context: SW Monsoon, NE Monsoon, Inter-monsoon)
+    # SW Monsoon (Jun-Sep): typically drier, haze season
+    # NE Monsoon (Dec-Mar): wetter, less haze
+    # Inter-monsoon (Apr-May, Oct-Nov): transition periods
+    if ts.month in [6, 7, 8, 9]:
+        features['season'] = 0  # SW Monsoon (haze season)
+    elif ts.month in [12, 1, 2, 3]:
+        features['season'] = 1  # NE Monsoon (wet season)
+    else:
+        features['season'] = 2  # Inter-monsoon
+
+    return features
+
+
+def engineer_fire_spatial_features(fires_df, singapore_pos=(1.3521, 103.8198)):
+    """
+    Engineer fire spatial features by distance bands.
+
+    Args:
+        fires_df: DataFrame of fires (last 72 hours)
+        singapore_pos: Tuple of (lat, lon) for Singapore
+
+    Returns:
+        dict: Fire count and FRP sum/mean by distance bands
+    """
+    from src.features.geospatial import haversine_distance
+
+    features = {}
+
+    # Define distance bands (in km)
+    distance_bands = [
+        (0, 250, 'near'),      # 0-250km: Very close fires
+        (250, 500, 'medium'),  # 250-500km: Medium distance
+        (500, 1000, 'far'),    # 500-1000km: Far fires
+        (1000, float('inf'), 'very_far')  # 1000+km: Very far fires
+    ]
+
+    if len(fires_df) == 0:
+        # No fires - all features are 0
+        for min_dist, max_dist, label in distance_bands:
+            features[f'fire_count_{label}'] = 0
+            features[f'fire_frp_sum_{label}'] = 0.0
+            features[f'fire_frp_mean_{label}'] = 0.0
+        return features
+
+    # Calculate distances for all fires
+    fires_with_dist = fires_df.copy()
+    fires_with_dist['distance_km'] = fires_with_dist.apply(
+        lambda row: haversine_distance(singapore_pos, (row['latitude'], row['longitude'])),
+        axis=1
+    )
+
+    # Count fires and aggregate FRP by distance band
+    for min_dist, max_dist, label in distance_bands:
+        band_fires = fires_with_dist[
+            (fires_with_dist['distance_km'] >= min_dist) &
+            (fires_with_dist['distance_km'] < max_dist)
+        ]
+
+        count = len(band_fires)
+        features[f'fire_count_{label}'] = count
+
+        if count > 0:
+            features[f'fire_frp_sum_{label}'] = float(band_fires['frp'].sum())
+            features[f'fire_frp_mean_{label}'] = float(band_fires['frp'].mean())
+        else:
+            features[f'fire_frp_sum_{label}'] = 0.0
+            features[f'fire_frp_mean_{label}'] = 0.0
+
+    return features
+
+
 def engineer_features_for_timestamp(timestamp, fires_df, weather_data, current_psi):
     """
     Engineer features for a single timestamp.
@@ -163,13 +304,25 @@ def _process_single_timestamp(timestamp):
         timestamp, fires_df, weather_forecast, current_psi
     )
 
+    # Engineer PSI lag features
+    psi_lag_features = engineer_psi_lag_features(timestamp, _GLOBAL_PSI)
+
+    # Engineer temporal features
+    temporal_features = engineer_temporal_features(timestamp)
+
+    # Engineer fire spatial features
+    fire_spatial_features = engineer_fire_spatial_features(fires_df)
+
     # Create target variables
     targets = create_target_variables(_GLOBAL_PSI, timestamp)
 
-    # Combine
+    # Combine all features
     record = {
         'timestamp': timestamp,
         **features,
+        **psi_lag_features,
+        **temporal_features,
+        **fire_spatial_features,
         **targets
     }
 

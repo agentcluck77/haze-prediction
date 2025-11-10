@@ -9,23 +9,35 @@ Real-time PSI (Pollutant Standards Index) forecasting for Singapore using machin
 - Virtual environment at `hacx/`
 - Local data files (PSI and VIIRS SNPP fire data)
 
-### 1. Train Models
+### 1. Generate Feature Cache
 
 ```bash
 source hacx/bin/activate
+python3 generate_eval_cache.py
+```
+
+**Generates cache:** April 2014 - Dec 2024 (sampled every 6h, ~25 features)
+- PSI: `data/PSI/Historical24hrPSI.csv`
+- Fire: `data/FIRM_MODIS/` (MODIS)
+- Weather: `data/weather/era5_grid.csv`
+
+**Output:** `data/cache/eval_2014-04-01_2024-12-31_h6.csv`
+
+**Time:** 10-30 minutes (one-time, reused for both training and evaluation)
+
+### 2. Train Models
+
+```bash
 python3 train_models.py
 ```
 
-**Training data:** March 2016 - Dec 2023 (loaded from local files)
-- PSI: `data/PSI/Historical24hrPSI.csv`
-- Fire: `data/FIRMS_historical/` (VIIRS SNPP)
-- Weather: Open-Meteo ERA5 archive (API)
+**Training data:** April 2014 - Dec 2023 (filtered from cache, 2024 reserved for testing)
 
 **Output:** 4 models saved to `models/` (24h, 48h, 72h, 7d)
 
-**Time:** 2-4 hours for full training
+**Time:** 1-2 minutes (fast, loads from cache)
 
-### 2. Evaluate Models
+### 3. Evaluate Models
 
 ```bash
 # CLI evaluation (2024 test set)
@@ -37,7 +49,7 @@ curl http://localhost:8000/evaluate
 
 **Test set:** Jan 2024 - Dec 2024 (independent from training)
 
-### 3. Start API Server
+### 4. Start API Server
 
 ```bash
 source hacx/bin/activate
@@ -117,8 +129,8 @@ hacx-extra/
 
 **Training (Local Files):**
 - PSI: Historical24hrPSI.csv (2014-2025, all regions)
-- Fire: VIIRS SNPP archive (2016-2024, Indonesia + Malaysia)
-- Weather: Open-Meteo ERA5 (2016-2024, API)
+- Fire: MODIS archive (2014-2024, Indonesia + Malaysia + Singapore)
+- Weather: ERA5 GRIB (2014-2024, gridded)
 
 **Real-time Predictions (APIs):**
 - Fire: VIIRS SNPP NRT (NASA FIRMS, 15min updates)
@@ -133,14 +145,18 @@ The prediction system uses a multiple linear regression model to forecast the Po
 
 **Algorithm:** Linear Regression
 
-**Features (3):**
-- Fire risk score (0-100): FRP, distance, recency
-- Wind transport score (0-100): Trajectory simulation
-- Baseline score (0-100): Current PSI / 5.0
+**Features (25):**
+- Fire risk score (1): FRP-weighted composite
+- Wind transport score (1): Trajectory simulation
+- Baseline score (1): Current PSI / 5.0
+- PSI lags (4): 1h, 6h, 12h, 24h ago
+- PSI trends (2): Rate of change over 1-6h, 6-24h
+- Temporal (5): Hour, day of week, month, day of year, season
+- Fire spatial (12): Count, FRP sum/mean by distance band (near/medium/far/very far)
 
 **Horizons:** 24h, 48h, 72h, 7d
 
-**Training:** Mar 2016 - Dec 2023 (hourly sampling)
+**Training:** April 2014 - Dec 2023 (6-hour sampling, includes 2015 haze crisis)
 **Test set:** Jan 2024 - Dec 2024 (independent)
 
 ### How it Works
@@ -148,15 +164,14 @@ The prediction system uses a multiple linear regression model to forecast the Po
 At its core, the model calculates the predicted PSI as a weighted sum of its input features. The relationship is expressed by the following equation:
 
 $$
-\text{Predicted PSI} = \beta_0 + \beta_1 \times \text{FireRisk} + \beta_2 \times \text{WindTransport} + \beta_3 \times \text{Baseline} + \epsilon
+\text{Predicted PSI} = \beta_0 + \sum_{i=1}^{25} \beta_i \times X_i + \epsilon
 $$
 
 Where:
--   `Predicted PSI` is the forecasted PSI value.
--   `FireRisk`, `WindTransport`, and `Baseline` are the input feature scores.
--   $\beta_0$ is the model's intercept, representing the baseline PSI prediction when all feature scores are zero.
--   $\beta_1, \beta_2, \beta_3$ are the coefficients (weights) learned by the model during training. Each coefficient represents the impact of its corresponding feature on the final PSI prediction.
--   $\epsilon$ represents the model's error term, accounting for variability not captured by the features.
+-   $X_i$ represents the $i$-th feature (fire scores, PSI lags, temporal features, spatial fire counts)
+-   $\beta_0$ is the model's intercept
+-   $\beta_i$ are the coefficients (weights) learned during training
+-   $\epsilon$ represents the model's error term
 
 During training, the model learns the optimal values for the coefficients ($\beta_i$) that minimize the difference between its predictions and the actual historical PSI values. A separate model with a unique set of coefficients is trained for each prediction horizon.
 
@@ -195,6 +210,26 @@ This score models the likelihood of smoke being transported to Singapore. It inv
 This score represents the current air quality situation, providing a starting point for the forecast. It is calculated by normalizing the current PSI value to a 0-100 scale.
 
 $$ \text{BaselineScore} = \frac{\min(\text{Current PSI}, 500)}{5.0} $$
+
+**4. PSI Historical Features**
+
+- **Lag Features:** PSI values at 1h, 6h, 12h, and 24h before the prediction time, capturing recent air quality history
+- **Trend Features:** Rate of change calculated as differences between lags (e.g., $\text{PSI}_{1h} - \text{PSI}_{6h}$), indicating whether air quality is improving or deteriorating
+
+**5. Temporal Features**
+
+Cyclic patterns in haze occurrence:
+- Hour of day (0-23)
+- Day of week (0-6)
+- Month (1-12)
+- Day of year (1-365)
+- Season (0=SW Monsoon/haze season Jun-Sep, 1=NE Monsoon/wet Dec-Mar, 2=Inter-monsoon)
+
+**6. Fire Spatial Distribution**
+
+Fire activity aggregated by distance bands from Singapore:
+- Near (0-250km), Medium (250-500km), Far (500-1000km), Very Far (1000+km)
+- For each band: fire count, total FRP, mean FRP
 
 ---
 

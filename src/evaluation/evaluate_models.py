@@ -7,9 +7,9 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.training.lightgbm_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
+from src.training.model_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import mean_absolute_error, mean_squared_error, accuracy_score, precision_recall_fscore_support
 import pandas as pd
 
 
@@ -76,8 +76,8 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
         print(f"\n[1/2] Loading test dataset from cache...")
 
     try:
-        # Use pre-generated cache file (covers 2014-04-01 to 2024-12-31, sampled every 6 hours)
-        cache_file = Path('data/cache/eval_2014-04-01_2024-12-31_h6.csv')
+        # Use pre-generated cache file (covers 2016-02-01 to 2024-12-31, sampled every 6 hours)
+        cache_file = Path('data/cache/eval_2016-02-01_2024-12-31_h6.csv')
 
         if not cache_file.exists():
             raise FileNotFoundError(f"Evaluation cache file not found: {cache_file}")
@@ -121,7 +121,7 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
         if verbose:
             print(f"\nEvaluating {horizon} model...")
 
-        model_file = models_dir / f'lightgbm_{horizon}.pkl'
+        model_file = models_dir / f'linear_regression_{horizon}.pkl'
 
         if not model_file.exists():
             if verbose:
@@ -143,15 +143,6 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             # Calculate regression metrics
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-            r2 = r2_score(y_test, y_pred)
-
-            # Calculate MAPE (Mean Absolute Percentage Error)
-            # Avoid division by zero - only calculate for non-zero actual values
-            non_zero_mask = y_test != 0
-            if non_zero_mask.sum() > 0:
-                mape = np.mean(np.abs((y_test[non_zero_mask] - y_pred[non_zero_mask]) / y_test[non_zero_mask])) * 100
-            else:
-                mape = 0.0
 
             # Calculate baseline (persistence) for comparison
             baseline_pred = test_df['baseline_score'] * 5.0  # Convert back to PSI
@@ -162,33 +153,12 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             y_pred_cat = psi_to_category(y_pred)
 
             accuracy = accuracy_score(y_test_cat, y_pred_cat)
-
-            # Calculate weighted average metrics
             precision, recall, f1, _ = precision_recall_fscore_support(
                 y_test_cat,
                 y_pred_cat,
                 average='weighted',
                 zero_division=0
             )
-
-            # Calculate per-class metrics for all 5 PSI bands
-            precision_per_class, recall_per_class, f1_per_class, support_per_class = precision_recall_fscore_support(
-                y_test_cat,
-                y_pred_cat,
-                average=None,  # Get per-class metrics
-                labels=[0, 1, 2, 3, 4],  # Ensure we get metrics for all 5 classes
-                zero_division=0
-            )
-
-            # Create per-band dictionary
-            per_band = {}
-            for i, category_name in enumerate(CATEGORY_NAMES):
-                per_band[category_name] = {
-                    'precision': float(precision_per_class[i]),
-                    'recall': float(recall_per_class[i]),
-                    'f1_score': float(f1_per_class[i]),
-                    'support': int(support_per_class[i])  # Number of actual samples in this category
-                }
 
             # Calculate improvement percentage (handle division by zero)
             if baseline_mae > 0:
@@ -199,25 +169,20 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             results[horizon] = {
                 'mae': float(mae),
                 'rmse': float(rmse),
-                'r2': float(r2),
-                'mape': float(mape),
                 'baseline_mae': float(baseline_mae),
                 'improvement_pct': improvement_pct,
                 'samples': int(len(y_test)),
-                'feature_importance': {
-                    feat: float(imp)
-                    for feat, imp in sorted(
-                        zip(FEATURE_COLUMNS, model.feature_importances_),
-                        key=lambda x: x[1],
-                        reverse=True
-                    )[:10]  # Top 10 features
+                'coefficients': {
+                    'fire_risk': float(model.coef_[0]),
+                    'wind_transport': float(model.coef_[1]),
+                    'baseline': float(model.coef_[2]),
+                    'intercept': float(model.intercept_)
                 },
                 'classification': {
                     'accuracy': float(accuracy),
                     'precision': float(precision),
                     'recall': float(recall),
-                    'f1_score': float(f1),
-                    'per_band': per_band
+                    'f1_score': float(f1)
                 }
             }
 
@@ -257,16 +222,18 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
 
             # Print model coefficients
             print("\n" + "=" * 70)
-            print("Top Feature Importance (LightGBM)")
+            print("Model Coefficients")
             print("=" * 70)
 
             for horizon in VALID_HORIZONS:
                 if horizon in results:
                     r = results[horizon]
-                    feat_imp = r['feature_importance']
-                    print(f"\n{horizon} Model - Top 10 Features:")
-                    for i, (feat, imp) in enumerate(feat_imp.items(), 1):
-                        print(f"  {i}. {feat:<25} {imp:>8.0f}")
+                    coef = r['coefficients']
+                    print(f"\n{horizon} Model:")
+                    print(f"  Fire risk coefficient:      {coef['fire_risk']:>8.4f}")
+                    print(f"  Wind transport coefficient: {coef['wind_transport']:>8.4f}")
+                    print(f"  Baseline coefficient:       {coef['baseline']:>8.4f}")
+                    print(f"  Intercept:                  {coef['intercept']:>8.4f}")
 
             # Check if fire features are being used
             print("\n" + "=" * 70)
@@ -276,36 +243,20 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             any_fire_used = False
             for horizon in VALID_HORIZONS:
                 if horizon in results:
-                    feat_imp = results[horizon]['feature_importance']
-                    fire_imp = feat_imp.get('fire_risk_score', 0)
-                    wind_imp = feat_imp.get('wind_transport_score', 0)
+                    fire_coef = results[horizon]['coefficients']['fire_risk']
+                    wind_coef = results[horizon]['coefficients']['wind_transport']
 
-                    if fire_imp > 10 or wind_imp > 10:
+                    if abs(fire_coef) > 0.01 or abs(wind_coef) > 0.01:
                         any_fire_used = True
                         print(f"\n{horizon}: Fire features ARE being used")
-                        print(f"  Fire risk importance: {fire_imp:.0f}")
-                        print(f"  Wind transport importance: {wind_imp:.0f}")
+                        print(f"  Fire risk impact: {fire_coef:.4f} per unit")
+                        print(f"  Wind transport impact: {wind_coef:.4f} per unit")
                     else:
-                        print(f"\n{horizon}: Fire features NOT being used (low importance)")
+                        print(f"\n{horizon}: Fire features NOT being used (coefficients near 0)")
 
             if not any_fire_used:
                 print("\nWARNING: No models are using fire features!")
                 print("This suggests the model is relying only on persistence (baseline).")
-
-            # Print per-band metrics
-            print("\n" + "=" * 70)
-            print("Per-Band Classification Metrics")
-            print("=" * 70)
-
-            for horizon in VALID_HORIZONS:
-                if horizon in results:
-                    print(f"\n{horizon} Model:")
-                    print(f"{'Band':<20} {'Precision':<12} {'Recall':<12} {'F1 Score':<12} {'Support':<12}")
-                    print("-" * 68)
-                    per_band = results[horizon]['classification']['per_band']
-                    for band_name, metrics in per_band.items():
-                        print(f"{band_name:<20} {metrics['precision']:<12.3f} {metrics['recall']:<12.3f} "
-                              f"{metrics['f1_score']:<12.3f} {metrics['support']:<12}")
 
             print("\n" + "=" * 70)
 

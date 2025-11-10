@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { getPSICategory, formatDate } from '@/utils/psi';
@@ -18,7 +18,13 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
   const [fires, setFires] = useState<FiresResponse | null>(null);
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 300000); // Refresh every 5 minutes
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadData = async () => {
     showLoading('Loading overview data...');
     try {
       const [psiData, predictionsData, firesData, weatherData] = await Promise.all([
@@ -37,13 +43,7 @@ export default function OverviewTab({ showLoading, hideLoading, showToast }: Ove
     } finally {
       hideLoading();
     }
-  }, [showLoading, hideLoading, showToast]);
-
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 300000); // Refresh every 5 minutes
-    return () => clearInterval(interval);
-  }, [loadData]);
+  };
   
   const nationalPSI = psi?.readings?.psi_24h?.national || 0;
   const category = getPSICategory(nationalPSI);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { getPSICategory, formatDate } from '@/utils/psi';
@@ -16,7 +16,11 @@ export default function PredictionsTab({ showLoading, hideLoading, showToast }: 
   const [selectedHorizon, setSelectedHorizon] = useState<Horizon | 'all'>('24h');
   const [prediction, setPrediction] = useState<PredictionResponse | AllPredictionsResponse | null>(null);
 
-  const loadPrediction = useCallback(async () => {
+  useEffect(() => {
+    loadPrediction();
+  }, [selectedHorizon]);
+
+  const loadPrediction = async () => {
     showLoading('Loading prediction...');
     try {
       const data = selectedHorizon === 'all'
@@ -28,11 +32,7 @@ export default function PredictionsTab({ showLoading, hideLoading, showToast }: 
     } finally {
       hideLoading();
     }
-  }, [selectedHorizon, showLoading, hideLoading, showToast]);
-
-  useEffect(() => {
-    loadPrediction();
-  }, [loadPrediction]);
+  };
   
   const horizons: (Horizon | 'all')[] = ['24h', '48h', '72h', '7d', 'all'];
 

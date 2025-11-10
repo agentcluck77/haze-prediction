@@ -130,12 +130,7 @@ export interface AlertMetrics {
 
 export interface CategoryAccuracy {
   overall: number;
-  by_category: Record<string, {
-    precision: number;
-    recall: number;
-    f1_score: number;
-    support: number;
-  }>;
+  by_category: Record<string, number>;
 }
 
 export interface Calibration {

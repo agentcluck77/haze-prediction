@@ -1,66 +1,82 @@
 # Feature Cache Directory
 
-This directory stores pre-computed features to avoid re-running expensive feature engineering.
-
-## Unified Cache Approach
-
-We use a **single comprehensive cache** covering the full date range (2014-2024):
-- Training loads the cache and filters to 2014-2023
-- Evaluation loads the cache and filters to desired period (typically 2024)
-
-This avoids computing features twice for overlapping periods.
+This directory stores pre-computed training features to avoid re-running expensive feature engineering.
 
 ## How It Works
 
-**Generate cache once:**
-```bash
-python3 generate_eval_cache.py  # 10-30 minutes
+**First training run:**
+```
+1. Feature engineering: ~5-10 minutes
+   - Load fire data
+   - Load weather data
+   - Process timestamps (DBSCAN, trajectories, etc.)
+   - Save to cache
+
+2. Model training: ~5 seconds
 ```
 
-**Then train (fast):**
-```bash
-python3 train_models.py  # 1-2 minutes (loads from cache)
+**Subsequent training runs:**
+```
+1. Load cached features: ~5 seconds
+2. Model training: ~5 seconds
 ```
 
-**Total time saved: 10-30 minutes per experiment!**
+**Total time saved: 5-10 minutes per experiment!**
 
 ## Cache Files
 
-**Primary cache (used by both training and evaluation):**
-- `eval_2014-04-01_2024-12-31_h6.csv` - Full dataset with 25 features
+Format: `training_{start_date}_{end_date}_h{sample_hours}.csv`
 
-Format: `eval_{start_date}_{end_date}_h{sample_hours}.csv`
-
-**Legacy training caches (deprecated):**
-- `training_*` files are no longer used
+Examples:
+- `training_2016-02-01_2023-12-31_h6.csv` - Training set (6-hour sampling)
+- `training_2024-01-01_2024-12-31_h6.csv` - Test set (6-hour sampling)
 
 ## Usage
 
-### Generate the cache:
-```bash
-python3 generate_eval_cache.py
+### Use cache (default):
+```python
+from src.training.data_preparation import prepare_training_dataset
+
+df = prepare_training_dataset(
+    start_date='2016-02-01',
+    end_date='2023-12-31',
+    sample_hours=6,
+    use_cache=True  # Loads from cache if available
+)
 ```
 
-This creates `eval_2014-04-01_2024-12-31_h6.csv` with 25 features.
+### Force rebuild (ignore cache):
+```python
+df = prepare_training_dataset(
+    start_date='2016-02-01',
+    end_date='2023-12-31',
+    sample_hours=6,
+    force_rebuild=True  # Recompute features
+)
+```
 
-### Training and evaluation automatically use this cache:
-- `train_models.py` - Loads cache, filters to 2014-2023
-- `src/evaluation/evaluate_models.py` - Loads cache, filters to desired period
+### Disable caching entirely:
+```python
+df = prepare_training_dataset(
+    start_date='2016-02-01',
+    end_date='2023-12-31',
+    sample_hours=6,
+    use_cache=False  # Don't save or load cache
+)
+```
 
 ## When to Rebuild
 
 Rebuild the cache when you:
-- Add new features (PSI lags, temporal features, etc.)
 - Update feature engineering logic
-- Add new data (2014-2015 fire/weather data)
-- Modify feature calculations (fire risk, wind transport, etc.)
+- Change data sources (new fire/weather data)
+- Modify feature calculations
 
 ## Cache Invalidation
 
-Delete the eval cache and regenerate:
+Simply delete the cache file:
 ```bash
-rm data/cache/eval_*.csv
-python3 generate_eval_cache.py
+rm data/cache/training_*.csv
 ```
 
-**Note:** This will take 10-30 minutes to regenerate, but only needs to be done when features change.
+Or use `force_rebuild=True` in code.

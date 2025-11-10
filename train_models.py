@@ -10,6 +10,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from src.training.data_preparation import prepare_training_dataset
 from src.training.model_trainer import train_and_save_all_models
 
 
@@ -19,33 +20,21 @@ def main():
     print("Singapore Haze Prediction - Model Training")
     print("=" * 60)
 
-    # Step 1: Load training data from eval cache
-    print("\n[1/2] Loading training dataset from eval cache...")
+    # Step 1: Prepare training data
+    print("\n[1/2] Preparing training dataset...")
+    print("This will fetch historical PSI and weather data...")
 
-    from pathlib import Path
-    import pandas as pd
-
-    # Use the comprehensive eval cache (2014-2024) and filter to training period
-    eval_cache_file = Path('data/cache/eval_2014-04-01_2024-12-31_h6.csv')
-
-    if not eval_cache_file.exists():
-        print(f"\n✗ ERROR: Eval cache not found: {eval_cache_file}")
-        print("Please run: python3 generate_eval_cache.py")
-        return 1
-
-    print(f"Loading from {eval_cache_file.name}...")
-    full_df = pd.read_csv(eval_cache_file)
-    full_df['timestamp'] = pd.to_datetime(full_df['timestamp'])
-
-    # Filter to training period (2014-2023, exclude 2024 test set)
-    training_df = full_df[
-        (full_df['timestamp'] >= '2014-04-01') &
-        (full_df['timestamp'] <= '2023-12-31')
-    ].copy()
+    # Train on 2016-2023 data (2024 reserved as independent test set)
+    # This uses local VIIRS SNPP fire data from data/FIRMS_historical/
+    training_df = prepare_training_dataset(
+        start_date='2016-02-01',  # Start from February 2016
+        end_date='2023-12-31',     # End of training period (2024 = test set)
+        sample_hours=6             # Sample every 6 hours (4 samples/day - good balance)
+    )
 
     if len(training_df) == 0:
-        print("\n✗ ERROR: No training data in cache!")
-        print("Cache may be empty or dates are incorrect.")
+        print("\n✗ ERROR: No training data produced!")
+        print("Cannot train models without data.")
         return 1
 
     print(f"✓ Training dataset prepared: {len(training_df)} samples")

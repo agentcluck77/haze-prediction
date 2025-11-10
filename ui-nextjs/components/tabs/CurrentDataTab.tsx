@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { formatDate } from '@/utils/psi';
@@ -19,11 +19,7 @@ export default function CurrentDataTab({ showLoading, hideLoading, showToast }: 
   const [minConfidence, setMinConfidence] = useState<ConfidenceLevel | ''>('');
   const [minFrp, setMinFrp] = useState<string>('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     showLoading('Loading current data...');
     try {
       const [psiData, firesData, weatherData] = await Promise.all([
@@ -40,7 +36,11 @@ export default function CurrentDataTab({ showLoading, hideLoading, showToast }: 
     } finally {
       hideLoading();
     }
-  };
+  }, [showLoading, hideLoading, showToast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const loadFires = async () => {
     showLoading('Loading fires...');

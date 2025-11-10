@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import Card from '@/components/Card';
 import { formatDate } from '@/utils/psi';
@@ -28,11 +28,7 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
   const [expandedExplanations, setExpandedExplanations] = useState<Set<string>>(new Set());
   const [expandedBands, setExpandedBands] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    loadAllMetrics();
-  }, []);
-
-  const loadAllMetrics = async () => {
+  const loadAllMetrics = useCallback(async () => {
     const horizons: Horizon[] = ['24h', '48h', '72h', '7d'];
     const promises = horizons.map(async (h) => {
       try {
@@ -57,7 +53,11 @@ export default function MetricsTab({ showLoading, hideLoading, showToast }: Metr
     });
 
     setAllMetrics(newMetrics);
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    loadAllMetrics();
+  }, [loadAllMetrics]);
 
   const loadCustomMetrics = async () => {
     showLoading('Loading custom metrics...');

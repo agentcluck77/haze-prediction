@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/Header';
 import TabNavigation from '@/components/TabNavigation';
 import OverviewTab from '@/components/tabs/OverviewTab';
@@ -21,19 +21,19 @@ export default function Home() {
   const [loadingText, setLoadingText] = useState('Loading...');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  const showLoading = (text: string = 'Loading...') => {
+  const showLoading = useCallback((text: string = 'Loading...') => {
     setLoadingText(text);
     setLoading(true);
-  };
+  }, []);
 
-  const hideLoading = () => {
+  const hideLoading = useCallback(() => {
     setLoading(false);
-  };
+  }, []);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

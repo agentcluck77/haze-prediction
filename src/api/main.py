@@ -458,44 +458,13 @@ async def get_model_metrics(
                 verbose=False
             )
         except Exception as eval_error:
-            # If evaluation fails (e.g., missing data files in Cloud Run),
-            # return placeholder metrics from model validation
-            from src.api.prediction import MODEL_METRICS
             import traceback
             logger.error(f"Evaluation failed: {str(eval_error)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-
-            return {
-                "horizon": horizon,
-                "period_days": period_days,
-                "sample_size": 0,
-                "last_validated": datetime.now().isoformat(),
-                "regression_metrics": {
-                    "mae": MODEL_METRICS[horizon]['mae'],
-                    "rmse": MODEL_METRICS[horizon]['rmse'],
-                    "r2": 0.0,
-                    "mape": 0.0
-                },
-                "alert_metrics": {
-                    "threshold": 100,
-                    "precision": 0.85,  # Placeholder
-                    "recall": 0.80,  # Placeholder
-                    "f1_score": 0.82,  # Placeholder
-                    "true_positives": 0,
-                    "false_positives": 0,
-                    "true_negatives": 0,
-                    "false_negatives": 0
-                },
-                "category_accuracy": {
-                    "overall": 0.85,  # Placeholder
-                    "by_category": {}
-                },
-                "calibration": {
-                    "ci_coverage_95": 0.95,
-                    "well_calibrated": True
-                },
-                "note": "Using validation metrics - historical data not available in production"
-            }
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to evaluate metrics: {str(eval_error)}"
+            )
 
         if not results:
             logger.error(f"evaluate_on_test_set returned None for {start_date} to {end_date}")
@@ -523,8 +492,8 @@ async def get_model_metrics(
             "regression_metrics": {
                 "mae": horizon_results['mae'],
                 "rmse": horizon_results['rmse'],
-                "r2": 0.0,  # Not calculated yet, placeholder
-                "mape": 0.0  # Not calculated yet, placeholder
+                "r2": horizon_results['r2'],
+                "mape": horizon_results['mape']
             },
             "alert_metrics": {
                 "threshold": 100,  # Unhealthy threshold
@@ -538,7 +507,7 @@ async def get_model_metrics(
             },
             "category_accuracy": {
                 "overall": horizon_results['classification']['accuracy'],
-                "by_category": {}  # Would need per-category breakdown
+                "by_category": horizon_results['classification']['per_band']
             },
             "calibration": {
                 "ci_coverage_95": 0.95,  # Placeholder - would calculate from CI analysis
@@ -670,54 +639,58 @@ async def get_benchmark_status(job_id: str):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """
-    System health check
+    System health check with caching for fast response
+
+    Uses cached health status (3 minute TTL) for fast response.
+    On first call or when cache expires, performs checks in parallel with 10s timeout each.
 
     Returns:
         Status of API, data sources, and last update times
+
+    Raises:
+        HTTPException: 503 if all API checks fail
     """
+    from src.api.health_cache import health_cache
+
     try:
-        # Check if we can fetch data from each source
+        # Get health status from cache (returns cached or refreshes if stale)
+        cache_result = await health_cache.get_health_status()
+
+        # Map cache results to HealthResponse format
         api_status = {
-            "firms": "unknown",
-            "open_meteo": "unknown",
-            "psi": "unknown"
+            "psi": "healthy" if cache_result["checks"]["psi_api"] else "unhealthy",
+            "firms": "healthy" if cache_result["checks"]["fires_api"] else "unhealthy",
+            "open_meteo": "healthy" if cache_result["checks"]["weather_api"] else "unhealthy"
         }
 
-        # Try to fetch PSI
-        try:
-            psi_data = fetch_current_psi()
-            api_status["psi"] = "healthy" if len(psi_data) > 0 else "degraded"
-        except:
-            api_status["psi"] = "unhealthy"
+        # Determine overall status
+        status = cache_result["status"]
 
-        # Try to fetch fires
-        try:
-            fires = fetch_recent_fires(days=1)
-            api_status["firms"] = "healthy" if fires is not None else "degraded"
-        except:
-            api_status["firms"] = "unhealthy"
-
-        # Try weather (implicitly tested via prediction)
-        try:
-            from src.data_ingestion.weather import fetch_current_weather
-            weather = fetch_current_weather(1.3521, 103.8198)
-            api_status["open_meteo"] = "healthy" if weather else "degraded"
-        except:
-            api_status["open_meteo"] = "unknown"
+        # If all checks failed on first call (no cache), return 503
+        if not any(cache_result["checks"].values()):
+            logger.error("All API health checks failed")
+            raise HTTPException(
+                status_code=503,
+                detail="All external APIs are unavailable"
+            )
 
         return {
-            "status": "healthy",
+            "status": status,
             "last_update": {
-                "fires": datetime.now().isoformat(),
-                "weather": datetime.now().isoformat(),
-                "psi": datetime.now().isoformat()
+                "psi": cache_result["timestamp"],
+                "fires": cache_result["timestamp"],
+                "weather": cache_result["timestamp"]
             },
             "api_status": api_status,
             "database": "not_configured"
         }
 
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
+        # Return degraded status on unexpected errors
         return {
             "status": "degraded",
             "last_update": {

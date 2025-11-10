@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.training.model_trainer import load_model, FEATURE_COLUMNS, VALID_HORIZONS
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, accuracy_score, precision_recall_fscore_support
 import pandas as pd
 
 
@@ -143,6 +143,15 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             # Calculate regression metrics
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            r2 = r2_score(y_test, y_pred)
+
+            # Calculate MAPE (Mean Absolute Percentage Error)
+            # Avoid division by zero - only calculate for non-zero actual values
+            non_zero_mask = y_test != 0
+            if non_zero_mask.sum() > 0:
+                mape = np.mean(np.abs((y_test[non_zero_mask] - y_pred[non_zero_mask]) / y_test[non_zero_mask])) * 100
+            else:
+                mape = 0.0
 
             # Calculate baseline (persistence) for comparison
             baseline_pred = test_df['baseline_score'] * 5.0  # Convert back to PSI
@@ -153,12 +162,33 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             y_pred_cat = psi_to_category(y_pred)
 
             accuracy = accuracy_score(y_test_cat, y_pred_cat)
+
+            # Calculate weighted average metrics
             precision, recall, f1, _ = precision_recall_fscore_support(
                 y_test_cat,
                 y_pred_cat,
                 average='weighted',
                 zero_division=0
             )
+
+            # Calculate per-class metrics for all 5 PSI bands
+            precision_per_class, recall_per_class, f1_per_class, support_per_class = precision_recall_fscore_support(
+                y_test_cat,
+                y_pred_cat,
+                average=None,  # Get per-class metrics
+                labels=[0, 1, 2, 3, 4],  # Ensure we get metrics for all 5 classes
+                zero_division=0
+            )
+
+            # Create per-band dictionary
+            per_band = {}
+            for i, category_name in enumerate(CATEGORY_NAMES):
+                per_band[category_name] = {
+                    'precision': float(precision_per_class[i]),
+                    'recall': float(recall_per_class[i]),
+                    'f1_score': float(f1_per_class[i]),
+                    'support': int(support_per_class[i])  # Number of actual samples in this category
+                }
 
             # Calculate improvement percentage (handle division by zero)
             if baseline_mae > 0:
@@ -169,6 +199,8 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
             results[horizon] = {
                 'mae': float(mae),
                 'rmse': float(rmse),
+                'r2': float(r2),
+                'mape': float(mape),
                 'baseline_mae': float(baseline_mae),
                 'improvement_pct': improvement_pct,
                 'samples': int(len(y_test)),
@@ -182,7 +214,8 @@ def evaluate_on_test_set(start_date='2024-01-01', end_date='2024-12-31', sample_
                     'accuracy': float(accuracy),
                     'precision': float(precision),
                     'recall': float(recall),
-                    'f1_score': float(f1)
+                    'f1_score': float(f1),
+                    'per_band': per_band
                 }
             }
 

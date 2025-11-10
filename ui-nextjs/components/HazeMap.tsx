@@ -1,183 +1,128 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Popup, Circle, useMap, CircleMarker } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import type { FireDetection } from '@/types/api';
 
-interface WindData {
-  lat: number;
-  lng: number;
-  speed: number; // m/s
-  direction: number; // degrees
-}
+// Import maplibre-gl dynamically (client-side only)
+let maplibregl: any = null;
 
 interface HazeMapProps {
   showFires?: boolean;
   showWind?: boolean;
 }
 
-// Wind arrows component - renders multiple wind vectors with variable length
-function WindArrows({ windData }: { windData: WindData[] }) {
-  const map = useMap();
+export default function HazeMap({ showFires = true, showWind = true }: HazeMapProps) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<any>(null);
+  const [mounted, setMounted] = useState(false);
+  const [showFiresState, setShowFiresState] = useState<boolean>(showFires);
+  const [showWindState, setShowWindState] = useState<boolean>(showWind);
+  const [fires, setFires] = useState<FireDetection[]>([]);
+  const [hazeLevel, setHazeLevel] = useState(0);
 
+  // Initialize map (client-side only)
   useEffect(() => {
-    const markers: L.Marker[] = [];
+    if (!mapContainer.current || map.current) return;
 
-    windData.forEach(({ lat, lng, speed, direction }) => {
-      // Skip if no wind data
-      if (!speed && !direction) return;
+    setMounted(true);
 
-      // Calculate arrow length based on wind speed
-      // Base length: 10px, scale factor: 3px per m/s, max length: 50px
-      const baseLength = 15;
-      const scaleFactor = 1.5;
-      // const maxLength = 50;
-      const arrowLength = baseLength + speed * scaleFactor;
+    // Load maplibre-gl client-side
+    if (!maplibregl) {
+      maplibregl = require('maplibre-gl');
+    }
 
-      // Calculate color based on speed (cyan-blue-purple scheme to avoid clash with red fires)
-      const getWindColor = (speed: number) => {
-        if (speed < 2) return '#06b6d4'; // Cyan - calm
-        if (speed < 5) return '#3b82f6'; // Blue - light breeze
-        if (speed < 8) return '#6366f1'; // Indigo - moderate
-        return '#8b5cf6'; // Purple - strong wind
-      };
+    // Create map
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: {
+        version: 8,
+        sources: {
+          'carto-light': {
+            type: 'raster',
+            tiles: [
+              'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+              'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+              'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+              'https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          }
+        },
+        layers: [
+          {
+            id: 'carto-light-layer',
+            type: 'raster',
+            source: 'carto-light',
+            minzoom: 0,
+            maxzoom: 22
+          }
+        ]
+      },
+      center: [103.8198, 1.3521], // Singapore
+      zoom: 6,
+      maxBounds: [
+        [90, -15], // Southwest coordinates
+        [145, 10]  // Northeast coordinates
+      ]
+    });
 
-      const windColor = getWindColor(speed);
+    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.current.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 
-      // SVG size - make it large enough to accommodate any arrow length plus padding
-      const padding = 10;
-      const svgSize = Math.max(80, (arrowLength + padding) * 2);
-      const center = svgSize / 2;
+    // Load wind arrow icon when map loads
+    map.current.on('load', () => {
+      if (!map.current) return;
 
+      // Create wind arrow SVG
       const svg = `
-        <svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
+        <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <marker id="arrowhead-${lat}-${lng}" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-              <polygon points="0 0, 5 2.5, 0 5" fill="${windColor}" fill-opacity="0.5" />
+            <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <polygon points="0 0, 8 4, 0 8" fill="#3b82f6" />
             </marker>
           </defs>
-          <line
-            x1="${center}"
-            y1="${center}"
-            x2="${center}"
-            y2="${center - arrowLength}"
-            stroke="${windColor}"
-            stroke-width="2"
-            stroke-opacity="0.5"
-            marker-end="url(#arrowhead-${lat}-${lng})"
-            transform="rotate(${direction} ${center} ${center})"
-          />
-          <circle cx="${center}" cy="${center}" r="2.5" fill="${windColor}" opacity="0.4" />
+          <line x1="20" y1="35" x2="20" y2="10" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowhead)" />
+          <circle cx="20" cy="35" r="3" fill="#3b82f6" />
         </svg>
       `;
 
-      const windIcon = L.divIcon({
-        html: svg,
-        className: 'wind-arrow',
-        iconSize: [svgSize, svgSize],
-        iconAnchor: [center, center],
-      });
-
-      const marker = L.marker([lat, lng], { icon: windIcon }).addTo(map);
-      marker.bindPopup(`
-        <div class="text-sm">
-          <div class="font-semibold mb-1">Wind Data</div>
-          <div>Speed: <span class="font-medium">${speed.toFixed(1)} m/s</span> (${(speed * 3.6).toFixed(1)} km/h)</div>
-          <div>Direction: <span class="font-medium">${direction.toFixed(0)}°</span></div>
-          <div class="text-xs text-gray-500 mt-1">Location: ${lat.toFixed(2)}, ${lng.toFixed(2)}</div>
-        </div>
-      `);
-
-      markers.push(marker);
+      const img = new Image(40, 40);
+      img.onload = () => {
+        if (map.current && !map.current.hasImage('wind-arrow')) {
+          map.current.addImage('wind-arrow', img);
+          console.log('Wind arrow icon loaded');
+        }
+      };
+      img.src = 'data:image/svg+xml;base64,' + btoa(svg);
     });
 
     return () => {
-      markers.forEach(marker => map.removeLayer(marker));
+      map.current?.remove();
+      map.current = null;
     };
-  }, [map, windData]);
+  }, []);
 
-  return null;
-}
-
-export default function HazeMap({ showFires = true, showWind = true}: HazeMapProps) {
-  const [mounted, setMounted] = useState(false);
-  // Local toggle state so checkboxes can control visibility
-  const [showFiresState, setShowFiresState] = useState<boolean>(showFires);
-  const [showWindState, setShowWindState] = useState<boolean>(showWind);
-
-  // Fetch fire data from API
-  const [fires, setFires] = useState<FireDetection[]>([]);
-
-  // Fetch wind data from API - now an array of wind vectors across the region
-  const [windData, setWindData] = useState<WindData[]>([]);
-  
-  const [hazeLevel, setHazeLevel] = useState(0); // PSI value from API
-  
-  // Singapore center coordinates
-  const center: [number, number] = [1.3521, 103.8198];
-  
+  // Fetch fires data
   useEffect(() => {
-    setMounted(true);
-
-    // Fetch fires data
     const fetchFires = async () => {
       try {
         const firesData = await api.getCurrentFires();
+        console.log('Fires data received:', firesData);
         setFires(firesData.fires || []);
       } catch (error) {
         console.error('Failed to fetch fires data:', error);
       }
     };
 
-    // Fetch weather/wind data for a grid of locations across the region
-    const fetchWeather = async () => {
-      try {
-        // Create a grid of locations across Indonesia-Singapore-Malaysia region
-        // Bounding box: 95,-11,141,6 (west, south, east, north)
-        const windVectors: WindData[] = [];
+    fetchFires();
+    const interval = setInterval(fetchFires, 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-        // Grid spacing: increased density with smaller steps
-        const latStart = -10;
-        const latEnd = 5;
-        const lngStart = 95;
-        const lngEnd = 140;
-        const latStep = 2.5; // Reduced from 5 to 2.5 degrees
-        const lngStep = 4;   // Reduced from 8 to 4 degrees
-
-        // Fetch wind data for grid points from Open-Meteo API
-        const promises = [];
-        for (let lat = latStart; lat <= latEnd; lat += latStep) {
-          for (let lng = lngStart; lng <= lngEnd; lng += lngStep) {
-            promises.push(
-              fetch(
-                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m&timezone=auto`
-              )
-                .then(res => res.json())
-                .then(data => ({
-                  lat,
-                  lng,
-                  speed: data.current?.wind_speed_10m || 0,
-                  direction: data.current?.wind_direction_10m || 0,
-                }))
-                .catch(() => null)
-            );
-          }
-        }
-
-        // Wait for all requests
-        const results = await Promise.all(promises);
-        const validResults = results.filter(r => r !== null) as WindData[];
-        setWindData(validResults);
-
-      } catch (error) {
-        console.error('Failed to fetch weather data:', error);
-      }
-    };
-
-    // Fetch PSI data for haze level
+  // Fetch PSI data
+  useEffect(() => {
     const fetchPSI = async () => {
       try {
         const psiData = await api.getCurrentPSI();
@@ -189,30 +134,273 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
       }
     };
 
-    fetchFires();
-    fetchWeather();
     fetchPSI();
+    const interval = setInterval(fetchPSI, 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-    // Refresh data periodically
-    const firesInterval = setInterval(fetchFires, 15 * 60 * 1000); // 15 minutes
-    const weatherInterval = setInterval(fetchWeather, 30 * 60 * 1000); // 30 minutes (multiple API calls)
-    const psiInterval = setInterval(fetchPSI, 15 * 60 * 1000); // 15 minutes
+  // Add fire markers to map
+  useEffect(() => {
+    if (!map.current || fires.length === 0) {
+      console.log('Not adding fires - map:', !!map.current, 'fires:', fires.length);
+      return;
+    }
+
+    const mapInstance = map.current;
+
+    console.log('Adding fires to map:', fires.length);
+
+    // Wait for map to load
+    if (!mapInstance.isStyleLoaded()) {
+      console.log('Map style not loaded, waiting...');
+      mapInstance.once('load', () => addFireMarkers());
+    } else {
+      addFireMarkers();
+    }
+
+    function addFireMarkers() {
+      if (!mapInstance) return;
+
+      console.log('Adding fire markers to map');
+
+      // Remove existing fire layers
+      if (mapInstance.getLayer('fires-layer')) {
+        mapInstance.removeLayer('fires-layer');
+      }
+      if (mapInstance.getSource('fires')) {
+        mapInstance.removeSource('fires');
+      }
+
+      // Convert fires to GeoJSON
+      const geojson: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: fires.map((fire) => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [fire.longitude, fire.latitude]
+          },
+          properties: {
+            confidence: fire.confidence,
+            brightness: fire.brightness,
+            frp: fire.frp,
+            distance: fire.distance_to_singapore_km,
+            satellite: fire.satellite,
+            acq_date: fire.acq_date,
+            acq_time: fire.acq_time
+          }
+        }))
+      };
+
+      // Add source
+      mapInstance.addSource('fires', {
+        type: 'geojson',
+        data: geojson
+      });
+
+      // Add layer
+      mapInstance.addLayer({
+        id: 'fires-layer',
+        type: 'circle',
+        source: 'fires',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#ef4444',
+          'circle-opacity': 0.8,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#dc2626'
+        }
+      });
+
+      console.log('Fire layer added successfully');
+
+      // Add click handler for popups
+      mapInstance.on('click', 'fires-layer', (e: any) => {
+        if (!e.features || e.features.length === 0) return;
+
+        const feature = e.features[0];
+        const props = feature.properties;
+
+        new (maplibregl as any).Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div class="text-sm">
+              <p class="font-semibold text-red-600 mb-2">🔥 Fire Detected</p>
+              <div class="space-y-1">
+                <p>Confidence: <span class="font-medium">${props?.confidence?.toUpperCase()}</span></p>
+                <p>Brightness: <span class="font-medium">${props?.brightness?.toFixed(1)}K</span></p>
+                <p>FRP: <span class="font-medium">${props?.frp?.toFixed(1)} MW</span></p>
+                <p>Distance: <span class="font-medium">${props?.distance?.toFixed(1)} km</span></p>
+                <p>Satellite: <span class="font-medium">${props?.satellite}</span></p>
+                <p class="text-xs text-gray-500 mt-2">${props?.acq_date} ${props?.acq_time}</p>
+              </div>
+            </div>
+          `)
+          .addTo(mapInstance);
+      });
+
+      // Change cursor on hover
+      mapInstance.on('mouseenter', 'fires-layer', () => {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      });
+      mapInstance.on('mouseleave', 'fires-layer', () => {
+        mapInstance.getCanvas().style.cursor = '';
+      });
+    }
+  }, [fires]);
+
+  // Add/remove wind layer
+  useEffect(() => {
+    if (!map.current) return;
+
+    const mapInstance = map.current;
+
+    async function toggleWindLayer() {
+      if (!mapInstance) return;
+
+      const windLayerId = 'wind-layer';
+
+      console.log('Toggle wind layer:', showWindState);
+
+      if (showWindState) {
+        // Fetch wind data and create a canvas layer
+        try {
+          // Fetch wind data for grid
+          const windData = [];
+          const latStart = -10;
+          const latEnd = 5;
+          const lngStart = 95;
+          const lngEnd = 140;
+          const latStep = 2.5;
+          const lngStep = 4;
+
+          console.log('Fetching wind data for canvas layer...');
+
+          for (let lat = latStart; lat <= latEnd; lat += latStep) {
+            for (let lng = lngStart; lng <= lngEnd; lng += lngStep) {
+              try {
+                const response = await fetch(
+                  `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m&timezone=auto`
+                );
+                const data = await response.json();
+                if (data.current) {
+                  windData.push({
+                    lat,
+                    lng,
+                    speed: data.current.wind_speed_10m || 0,
+                    direction: data.current.wind_direction_10m || 0,
+                  });
+                }
+              } catch (err) {
+                console.error('Error fetching wind for', lat, lng, err);
+              }
+            }
+          }
+
+          console.log('Wind data fetched:', windData.length, 'points');
+
+          // Remove existing wind layer if it exists
+          if (mapInstance.getLayer(windLayerId)) {
+            mapInstance.removeLayer(windLayerId);
+          }
+          if (mapInstance.getSource('wind-source')) {
+            mapInstance.removeSource('wind-source');
+          }
+
+          // Create GeoJSON features for wind arrows
+          const windFeatures = windData.map((wind) => ({
+            type: 'Feature' as const,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: [wind.lng, wind.lat],
+            },
+            properties: {
+              speed: wind.speed,
+              direction: wind.direction,
+              // Create arrow SVG for symbol layer
+              icon: 'wind-arrow'
+            },
+          }));
+
+          const geojson = {
+            type: 'FeatureCollection' as const,
+            features: windFeatures,
+          };
+
+          // Add wind source
+          mapInstance.addSource('wind-source', {
+            type: 'geojson',
+            data: geojson,
+          });
+
+          // Add wind arrows as symbols
+          mapInstance.addLayer({
+            id: windLayerId,
+            type: 'symbol',
+            source: 'wind-source',
+            layout: {
+              'icon-image': 'wind-arrow',
+              'icon-size': 0.5,
+              'icon-rotate': ['get', 'direction'],
+              'icon-rotation-alignment': 'map',
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+            },
+            paint: {
+              'icon-opacity': 0.7,
+            },
+          });
+
+          console.log('Wind layer added with', windFeatures.length, 'arrows');
+        } catch (error) {
+          console.error('Error adding wind layer:', error);
+        }
+      } else {
+        // Remove wind layer
+        if (mapInstance.getLayer(windLayerId)) {
+          console.log('Removing wind layer');
+          mapInstance.removeLayer(windLayerId);
+        }
+        if (mapInstance.getSource('wind-source')) {
+          mapInstance.removeSource('wind-source');
+        }
+      }
+    }
+
+    // Wait for map to be fully loaded before adding wind layer
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const addWindLayer = () => {
+      if (mapInstance.isStyleLoaded() && mapInstance.hasImage('wind-arrow')) {
+        toggleWindLayer();
+      } else {
+        // Wait a bit and try again
+        timeoutId = setTimeout(addWindLayer, 100);
+      }
+    };
+
+    addWindLayer();
 
     return () => {
-      clearInterval(firesInterval);
-      clearInterval(weatherInterval);
-      clearInterval(psiInterval);
+      if (timeoutId) clearTimeout(timeoutId);
     };
-  }, []);
-  
-  if (!mounted) {
-    return (
-      <div className="w-full h-[600px] bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg flex items-center justify-center">
-        <p className="text-gray-500 dark:text-gray-400">Loading map...</p>
-      </div>
-    );
-  }
-  
+  }, [showWindState]);
+
+  // Toggle fire visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const mapInstance = map.current;
+
+    if (mapInstance.getLayer('fires-layer')) {
+      mapInstance.setLayoutProperty(
+        'fires-layer',
+        'visibility',
+        showFiresState ? 'visible' : 'none'
+      );
+    }
+  }, [showFiresState]);
+
   return (
     <div className="space-y-4">
       {/* Controls */}
@@ -227,7 +415,7 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
             />
             <span className="text-sm text-gray-900 dark:text-gray-100 font-medium">Show Fires</span>
           </label>
-          
+
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -237,7 +425,6 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
             />
             <span className="text-sm text-gray-900 dark:text-gray-100 font-medium">Show Wind</span>
           </label>
-
 
           <div className="ml-auto flex items-center gap-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Haze Level:</span>
@@ -252,59 +439,12 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
           </div>
         </div>
       </div>
-      
+
       {/* Map */}
       <div className="w-full h-[600px] rounded-lg overflow-hidden shadow-lg border dark:border-gray-700">
-        <MapContainer
-          center={center}
-          zoom={11}
-          style={{ height: '100%', width: '100%' }}
-          className="z-0"
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-          />
-          
-          {/* Fire markers */}
-          {showFiresState && fires.map((fire, index) => (
-            <CircleMarker
-              key={`${fire.latitude}-${fire.longitude}-${index}`}
-              center={[fire.latitude, fire.longitude]}
-              radius={8}
-              pathOptions={{
-                fillColor: '#ef4444',
-                fillOpacity: 0.8,
-                color: '#dc2626',
-                weight: 2,
-              }}
-            >
-              <Popup>
-                <div className="min-w-[200px]">
-                  <p className="font-semibold text-red-600 mb-2">🔥 Fire Detected</p>
-                  <div className="space-y-1 text-sm">
-                    <p>Confidence: <span className="font-medium">{fire.confidence.toUpperCase()}</span></p>
-                    <p>Brightness: <span className="font-medium">{fire.brightness.toFixed(1)}K</span></p>
-                    <p>FRP: <span className="font-medium">{fire.frp.toFixed(1)} MW</span></p>
-                    <p>Distance: <span className="font-medium">{fire.distance_to_singapore_km.toFixed(1)} km</span></p>
-                    <p>Satellite: <span className="font-medium">{fire.satellite}</span></p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      {fire.acq_date} {fire.acq_time}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Lat: {fire.latitude.toFixed(4)}, Lng: {fire.longitude.toFixed(4)}
-                    </p>
-                  </div>
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
-          
-          {/* Wind arrows */}
-          {showWindState && windData.length > 0 && <WindArrows windData={windData} />}
-        </MapContainer>
+        <div ref={mapContainer} className="w-full h-full" />
       </div>
-      
+
       {/* Legend */}
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border dark:border-gray-700">
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Legend</h3>
@@ -316,26 +456,9 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
           </div>
 
           {/* Wind Legend */}
-          <div>
-            <div className="font-medium mb-2">Wind Vectors (length = speed)</div>
-            <div className="space-y-1 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-[#06b6d4] rounded-full"></div>
-                <span>&lt; 2 m/s (Calm)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-[#3b82f6] rounded-full"></div>
-                <span>2-5 m/s (Light)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-[#6366f1] rounded-full"></div>
-                <span>5-8 m/s (Moderate)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-[#8b5cf6] rounded-full"></div>
-                <span>&gt; 8 m/s (Strong)</span>
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-blue-500 rounded-full"></div>
+            <span>Wind Vectors (Open-Meteo)</span>
           </div>
         </div>
       </div>

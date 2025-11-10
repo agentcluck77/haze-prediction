@@ -7,3 +7,10 @@ data/weather/*.grib filter=lfs diff=lfs merge=lfs -text
 data/weather/*.idx filter=lfs diff=lfs merge=lfs -text
 data/weather_grid/weather_grid.csv filter=lfs diff=lfs merge=lfs -text
 data/FIRMS_historical/** filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis_2014_Malaysia.csv filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis_2014_Singapore.csv filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis_2015_Indonesia.csv filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis_2015_Malaysia.csv filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis_2015_Singapore.csv filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis/ filter=lfs diff=lfs merge=lfs -text
+data/FIRM_MODIS/modis_2014_Indonesia.csv filter=lfs diff=lfs merge=lfs -text

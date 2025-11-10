@@ -13,8 +13,8 @@ from sqlalchemy.exc import IntegrityError
 # FIRMS API Configuration
 MAP_KEY = os.getenv('FIRMS_MAP_KEY', 'f6cd6de4fa5a42514a72c8525064e890')
 BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv'
-DEFAULT_BBOX = "95,-11,141,6"  # Indonesia
-DEFAULT_SATELLITE = os.getenv('FIRMS_SATELLITE', 'MODIS_NRT')
+DEFAULT_BBOX = "95,-11,141,6"  # Indonesia-Singapore-Malaysia region
+DEFAULT_SATELLITE = os.getenv('FIRMS_SATELLITE', 'VIIRS_SNPP_NRT')  # Better coverage than MODIS
 
 
 def fetch_recent_fires(days=1, bbox=None, satellite=None):
@@ -68,18 +68,29 @@ def fetch_recent_fires(days=1, bbox=None, satellite=None):
         if 'satellite' not in df.columns:
             df['satellite'] = satellite
 
-        # Convert numeric confidence to letter code (l/n/h)
+        # Convert confidence to letter code (l/n/h)
         def confidence_to_letter(conf):
-            """Convert numeric confidence (0-100) to letter code"""
+            """Convert confidence to letter code (handles both numeric and letter formats)"""
             if pd.isna(conf):
                 return 'n'
-            conf_num = float(conf)
-            if conf_num >= 80:
-                return 'h'
-            elif conf_num >= 50:
+
+            # Check if already a letter code
+            conf_str = str(conf).lower()
+            if conf_str in ['l', 'n', 'h']:
+                return conf_str
+
+            # Convert numeric confidence (0-100) to letter code
+            try:
+                conf_num = float(conf)
+                if conf_num >= 80:
+                    return 'h'
+                elif conf_num >= 50:
+                    return 'n'
+                else:
+                    return 'l'
+            except (ValueError, TypeError):
+                # Default to 'n' if conversion fails
                 return 'n'
-            else:
-                return 'l'
 
         # Vectorize confidence conversion for speed
         if 'confidence' in df.columns:

@@ -1,38 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Popup, Circle, useMap, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-
-// Fix for default marker icons in Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// Custom fire icon
-const fireIcon = new L.Icon({
-  iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ff4444" width="32" height="32">
-      <path d="M12 23c-2.2 0-4-1.8-4-4 0-1.5.8-2.8 2-3.5-.1-.3-.2-.7-.2-1 0-1.7 1.3-3 3-3 .5 0 1 .1 1.4.4.1-.5.3-.9.6-1.3-1.7-.7-3-2.4-3-4.4 0-2.6 2.1-4.7 4.7-4.7.8 0 1.5.2 2.2.5-.4.9-.7 1.9-.7 3 0 3.3 2.7 6 6 6v1c0 4.4-3.6 8-8 8z"/>
-    </svg>
-  `),
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
-
-interface FireData {
-  id: string;
-  lat: number;
-  lng: number;
-  confidence: string;
-}
+import { api } from '@/lib/api';
+import type { FireDetection } from '@/types/api';
 
 interface WindData {
+  lat: number;
+  lng: number;
   speed: number; // m/s
   direction: number; // degrees
 }
@@ -42,40 +19,86 @@ interface HazeMapProps {
   showWind?: boolean;
 }
 
-// Wind arrow component
-function WindArrow({ speed, direction }: WindData) {
+// Wind arrows component - renders multiple wind vectors with variable length
+function WindArrows({ windData }: { windData: WindData[] }) {
   const map = useMap();
-  
+
   useEffect(() => {
-    const center = map.getCenter();
-    const svg = `
-      <svg width="60" height="60" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-            <polygon points="0 0, 10 3, 0 6" fill="#3b82f6" />
-          </marker>
-        </defs>
-        <line x1="30" y1="30" x2="30" y2="5" stroke="#3b82f6" stroke-width="3" marker-end="url(#arrowhead)" 
-              transform="rotate(${direction} 30 30)" />
-        <circle cx="30" cy="30" r="4" fill="#3b82f6" />
-      </svg>
-    `;
-    
-    const windIcon = L.divIcon({
-      html: svg,
-      className: 'wind-arrow',
-      iconSize: [60, 60],
-      iconAnchor: [30, 30],
+    const markers: L.Marker[] = [];
+
+    windData.forEach(({ lat, lng, speed, direction }) => {
+      // Skip if no wind data
+      if (!speed && !direction) return;
+
+      // Calculate arrow length based on wind speed
+      // Base length: 10px, scale factor: 3px per m/s, max length: 50px
+      const baseLength = 15;
+      const scaleFactor = 1.5;
+      // const maxLength = 50;
+      const arrowLength = baseLength + speed * scaleFactor;
+
+      // Calculate color based on speed (cyan-blue-purple scheme to avoid clash with red fires)
+      const getWindColor = (speed: number) => {
+        if (speed < 2) return '#06b6d4'; // Cyan - calm
+        if (speed < 5) return '#3b82f6'; // Blue - light breeze
+        if (speed < 8) return '#6366f1'; // Indigo - moderate
+        return '#8b5cf6'; // Purple - strong wind
+      };
+
+      const windColor = getWindColor(speed);
+
+      // SVG size - make it large enough to accommodate any arrow length plus padding
+      const padding = 10;
+      const svgSize = Math.max(80, (arrowLength + padding) * 2);
+      const center = svgSize / 2;
+
+      const svg = `
+        <svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead-${lat}-${lng}" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+              <polygon points="0 0, 5 2.5, 0 5" fill="${windColor}" fill-opacity="0.5" />
+            </marker>
+          </defs>
+          <line
+            x1="${center}"
+            y1="${center}"
+            x2="${center}"
+            y2="${center - arrowLength}"
+            stroke="${windColor}"
+            stroke-width="2"
+            stroke-opacity="0.5"
+            marker-end="url(#arrowhead-${lat}-${lng})"
+            transform="rotate(${direction} ${center} ${center})"
+          />
+          <circle cx="${center}" cy="${center}" r="2.5" fill="${windColor}" opacity="0.4" />
+        </svg>
+      `;
+
+      const windIcon = L.divIcon({
+        html: svg,
+        className: 'wind-arrow',
+        iconSize: [svgSize, svgSize],
+        iconAnchor: [center, center],
+      });
+
+      const marker = L.marker([lat, lng], { icon: windIcon }).addTo(map);
+      marker.bindPopup(`
+        <div class="text-sm">
+          <div class="font-semibold mb-1">Wind Data</div>
+          <div>Speed: <span class="font-medium">${speed.toFixed(1)} m/s</span> (${(speed * 3.6).toFixed(1)} km/h)</div>
+          <div>Direction: <span class="font-medium">${direction.toFixed(0)}°</span></div>
+          <div class="text-xs text-gray-500 mt-1">Location: ${lat.toFixed(2)}, ${lng.toFixed(2)}</div>
+        </div>
+      `);
+
+      markers.push(marker);
     });
-    
-    const marker = L.marker(center, { icon: windIcon }).addTo(map);
-    marker.bindPopup(`Wind Speed: ${speed} m/s<br>Direction: ${direction}°`);
-    
+
     return () => {
-      map.removeLayer(marker);
+      markers.forEach(marker => map.removeLayer(marker));
     };
-  }, [map, speed, direction]);
-  
+  }, [map, windData]);
+
   return null;
 }
 
@@ -84,32 +107,108 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
   // Local toggle state so checkboxes can control visibility
   const [showFiresState, setShowFiresState] = useState<boolean>(showFires);
   const [showWindState, setShowWindState] = useState<boolean>(showWind);
+
+  // Fetch fire data from API
+  const [fires, setFires] = useState<FireDetection[]>([]);
+
+  // Fetch wind data from API - now an array of wind vectors across the region
+  const [windData, setWindData] = useState<WindData[]>([]);
   
-  // Sample data - replace with your API calls
-  const [fires, setFires] = useState<FireData[]>([
-    { id: '1', lat: 1.3521, lng: 103.8198, confidence: 'High' },
-    { id: '2', lat: 1.2897, lng: 103.8501, confidence: 'High' },
-    { id: '3', lat: 1.4382, lng: 103.7892, confidence: 'High' },
-  ]);
-  
-  const [windData, setWindData] = useState<WindData>({
-    speed: 5.2,
-    direction: 135,
-  });
-  
-  const [hazeLevel, setHazeLevel] = useState(78); // PSI or AQI value
+  const [hazeLevel, setHazeLevel] = useState(0); // PSI value from API
   
   // Singapore center coordinates
   const center: [number, number] = [1.3521, 103.8198];
   
   useEffect(() => {
     setMounted(true);
+
+    // Fetch fires data
+    const fetchFires = async () => {
+      try {
+        const firesData = await api.getCurrentFires();
+        setFires(firesData.fires || []);
+      } catch (error) {
+        console.error('Failed to fetch fires data:', error);
+      }
+    };
+
+    // Fetch weather/wind data for a grid of locations across the region
+    const fetchWeather = async () => {
+      try {
+        // Create a grid of locations across Indonesia-Singapore-Malaysia region
+        // Bounding box: 95,-11,141,6 (west, south, east, north)
+        const windVectors: WindData[] = [];
+
+        // Grid spacing: increased density with smaller steps
+        const latStart = -10;
+        const latEnd = 5;
+        const lngStart = 95;
+        const lngEnd = 140;
+        const latStep = 2.5; // Reduced from 5 to 2.5 degrees
+        const lngStep = 4;   // Reduced from 8 to 4 degrees
+
+        // Fetch wind data for grid points from Open-Meteo API
+        const promises = [];
+        for (let lat = latStart; lat <= latEnd; lat += latStep) {
+          for (let lng = lngStart; lng <= lngEnd; lng += lngStep) {
+            promises.push(
+              fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m&timezone=auto`
+              )
+                .then(res => res.json())
+                .then(data => ({
+                  lat,
+                  lng,
+                  speed: data.current?.wind_speed_10m || 0,
+                  direction: data.current?.wind_direction_10m || 0,
+                }))
+                .catch(() => null)
+            );
+          }
+        }
+
+        // Wait for all requests
+        const results = await Promise.all(promises);
+        const validResults = results.filter(r => r !== null) as WindData[];
+        setWindData(validResults);
+
+      } catch (error) {
+        console.error('Failed to fetch weather data:', error);
+      }
+    };
+
+    // Fetch PSI data for haze level
+    const fetchPSI = async () => {
+      try {
+        const psiData = await api.getCurrentPSI();
+        if (psiData?.readings?.psi_24h?.national) {
+          setHazeLevel(psiData.readings.psi_24h.national);
+        }
+      } catch (error) {
+        console.error('Failed to fetch PSI data:', error);
+      }
+    };
+
+    fetchFires();
+    fetchWeather();
+    fetchPSI();
+
+    // Refresh data periodically
+    const firesInterval = setInterval(fetchFires, 15 * 60 * 1000); // 15 minutes
+    const weatherInterval = setInterval(fetchWeather, 30 * 60 * 1000); // 30 minutes (multiple API calls)
+    const psiInterval = setInterval(fetchPSI, 15 * 60 * 1000); // 15 minutes
+
+    return () => {
+      clearInterval(firesInterval);
+      clearInterval(weatherInterval);
+      clearInterval(psiInterval);
+    };
   }, []);
   
   if (!mounted) {
     return (
-      <div className="w-full h-[600px] bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-        <p className="text-gray-500">Loading map...</p>
+      <div className="w-full h-[600px] bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg flex items-center justify-center">
+        <p className="text-gray-500 dark:text-gray-400">Loading map...</p>
       </div>
     );
   }
@@ -117,7 +216,7 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border dark:border-gray-700">
         <div className="flex flex-wrap gap-4 items-center">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -126,7 +225,7 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
               onChange={(e) => setShowFiresState(e.target.checked)}
               className="w-4 h-4 text-blue-600 rounded"
             />
-            <span className="text-sm text-black font-medium">Show Fires</span>
+            <span className="text-sm text-gray-900 dark:text-gray-100 font-medium">Show Fires</span>
           </label>
           
           <label className="flex items-center gap-2 cursor-pointer">
@@ -136,12 +235,12 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
               onChange={(e) => setShowWindState(e.target.checked)}
               className="w-4 h-4 text-blue-600 rounded"
             />
-            <span className="text-sm text-black font-medium">Show Wind</span>
+            <span className="text-sm text-gray-900 dark:text-gray-100 font-medium">Show Wind</span>
           </label>
 
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-sm text-gray-600">Haze Level:</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Haze Level:</span>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
               hazeLevel < 50 ? 'bg-green-100 text-green-800' :
               hazeLevel < 100 ? 'bg-yellow-100 text-yellow-800' :
@@ -155,7 +254,7 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
       </div>
       
       {/* Map */}
-      <div className="w-full h-[600px] rounded-lg overflow-hidden shadow-lg border">
+      <div className="w-full h-[600px] rounded-lg overflow-hidden shadow-lg border dark:border-gray-700">
         <MapContainer
           center={center}
           zoom={11}
@@ -168,46 +267,75 @@ export default function HazeMap({ showFires = true, showWind = true}: HazeMapPro
           />
           
           {/* Fire markers */}
-          {showFiresState && fires.map((fire) => (
-            <Marker
-              key={fire.id}
-              position={[fire.lat, fire.lng]}
-              icon={fireIcon}
+          {showFiresState && fires.map((fire, index) => (
+            <CircleMarker
+              key={`${fire.latitude}-${fire.longitude}-${index}`}
+              center={[fire.latitude, fire.longitude]}
+              radius={8}
+              pathOptions={{
+                fillColor: '#ef4444',
+                fillOpacity: 0.8,
+                color: '#dc2626',
+                weight: 2,
+              }}
             >
               <Popup>
-                <div className="min-w-[150px]">
+                <div className="min-w-[200px]">
                   <p className="font-semibold text-red-600 mb-2">🔥 Fire Detected</p>
                   <div className="space-y-1 text-sm">
-                    <p>Confidence: <span className="font-medium">{fire.confidence}</span></p>
+                    <p>Confidence: <span className="font-medium">{fire.confidence.toUpperCase()}</span></p>
+                    <p>Brightness: <span className="font-medium">{fire.brightness.toFixed(1)}K</span></p>
+                    <p>FRP: <span className="font-medium">{fire.frp.toFixed(1)} MW</span></p>
+                    <p>Distance: <span className="font-medium">{fire.distance_to_singapore_km.toFixed(1)} km</span></p>
+                    <p>Satellite: <span className="font-medium">{fire.satellite}</span></p>
                     <p className="text-xs text-gray-500 mt-2">
-                      Lat: {fire.lat.toFixed(4)}, Lng: {fire.lng.toFixed(4)}
+                      {fire.acq_date} {fire.acq_time}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Lat: {fire.latitude.toFixed(4)}, Lng: {fire.longitude.toFixed(4)}
                     </p>
                   </div>
                 </div>
               </Popup>
-            </Marker>
+            </CircleMarker>
           ))}
           
-          {/* Wind arrow */}
-          {showWindState && <WindArrow speed={windData.speed} direction={windData.direction} />}
+          {/* Wind arrows */}
+          {showWindState && windData.length > 0 && <WindArrows windData={windData} />}
         </MapContainer>
       </div>
       
       {/* Legend */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <h3 className="font-semibold mb-3">Legend</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border dark:border-gray-700">
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Legend</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
+          {/* Fire Legend */}
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-red-500 rounded-full"></div>
-            <span>Fire Location</span>
+            <span>Fire Detection (VIIRS)</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-blue-500 rounded-full"></div>
-            <span>Wind Direction</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-yellow-400 opacity-40 rounded-full"></div>
-            <span>Haze Coverage</span>
+
+          {/* Wind Legend */}
+          <div>
+            <div className="font-medium mb-2">Wind Vectors (length = speed)</div>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-[#06b6d4] rounded-full"></div>
+                <span>&lt; 2 m/s (Calm)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-[#3b82f6] rounded-full"></div>
+                <span>2-5 m/s (Light)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-[#6366f1] rounded-full"></div>
+                <span>5-8 m/s (Moderate)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-[#8b5cf6] rounded-full"></div>
+                <span>&gt; 8 m/s (Strong)</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

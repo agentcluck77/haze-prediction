@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 const HazeMap = dynamic(() => import('@/components/HazeMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[600px] bg-gray-200 animate-pulse rounded-lg" />
+    <div className="w-full h-[600px] bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg" />
   ),
 });
 
@@ -21,7 +21,7 @@ interface MapTabProps {
 export default function MapTab({ showLoading, hideLoading, showToast }: MapTabProps) {
   return (
     <div>
-      <h2 className="text-black font-bold mb-4 ">Haze Detection Map</h2>
+      <h2 className="text-gray-900 dark:text-gray-100 font-bold mb-4">Haze Detection Map</h2>
       <HazeMap />
     </div>
   );
